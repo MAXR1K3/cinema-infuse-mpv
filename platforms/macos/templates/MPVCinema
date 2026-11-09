@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+RESOURCES="$HERE/../Resources"
+if [ "$(/usr/bin/uname -m)" != "arm64" ]; then
+ /usr/bin/osascript -e 'display alert "Cinema Infuse" message "此安装包适用于 Apple 芯片的 Mac。"'
+ exit 1
+fi
+exec "$RESOURCES/runtime/node" "$RESOURCES/launcher.cjs"

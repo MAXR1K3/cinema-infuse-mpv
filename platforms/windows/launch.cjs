@@ -1,0 +1,11 @@
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{execFile}=require('node:child_process');
+const project=path.resolve(__dirname,'../..'),settings=path.join(project,'config.local.json'),config=fs.existsSync(settings)?JSON.parse(fs.readFileSync(settings,'utf8')):{};
+if(process.platform!=='win32')throw Error('Use the macOS builder on macOS; this launcher is for Windows.');
+const directory=path.join(process.env.APPDATA || os.homedir(),'CinemaInfuse'),port=Number(process.env.MPV_LIBRARY_PORT || config.port || 7788),mpv=process.env.MPV_EXE || config.mpvExe || path.join(project,'runtime/windows/mpv.exe');
+if(!fs.existsSync(mpv))throw Error('mpv.exe not found. Run platforms/windows/configure.cjs --mpv-root YOUR_MPV_DIRECTORY first.');
+if(!Number.isInteger(port)||port<1024||port>65535)throw Error('port must be an integer from 1024 to 65535');
+fs.mkdirSync(directory,{recursive:true});
+const defaults={MPV_LIBRARY_ROOT:config.libraryRoot || path.join(os.homedir(),'Movies'),MPV_EXE:mpv,MPV_LIBRARY_PORT:String(port),MPV_EMBY_URL:config.embyUrl || 'https://example.invalid',MPV_EMBY_SESSION_FILE:path.join(directory,'emby-session.json'),MPV_LIBRARY_USER_DATA:path.join(directory,'user-data.json'),MPV_PROGRESS_DIR:path.join(directory,'playback-progress'),MPV_WEBDAV_DIRECTORY:path.join(directory,'webdav'),MPV_HISTORY:path.join(path.dirname(mpv),'portable_config/files/watch_history.jsonl'),MPV_WATCH_LATER_DIR:path.join(path.dirname(mpv),'portable_config/cache/watch_later')};
+for(const [key,value]of Object.entries(defaults))if(!process.env[key])process.env[key]=value;
+require('../../apps/cinema/server.js');
+let attempts=0;const timer=setInterval(async()=>{if(++attempts>30){clearInterval(timer);return;}try{const r=await fetch(`http://127.0.0.1:${port}/`,{signal:AbortSignal.timeout(800)});if(r.ok){clearInterval(timer);execFile('rundll32.exe',['url.dll,FileProtocolHandler',`http://127.0.0.1:${port}/`],{windowsHide:true},()=>{});}}catch{}},500);

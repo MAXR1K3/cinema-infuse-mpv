@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>影院 · mpv 影库</title><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/emby.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="影库导航">
+      <div class="mark" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 9 6-9 6Z" fill="currentColor" stroke="none"/></svg></div>
+      <button class="rail-btn active" data-view="home" title="首页" aria-label="首页"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></svg></span><span class="rail-label">首页</span></button>
+      <button class="rail-btn" data-view="all" title="本地影片" aria-label="本地影片"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 4v16M16 4v16M3 9h5M3 15h5M16 9h5M16 15h5"/></svg></span><span class="rail-label">本地影片</span></button>
+      <button class="rail-btn" data-view="emby" title="Emby 片库" aria-label="Emby 片库"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 4h11a2 2 0 0 1 2 2v10"/><rect x="3" y="8" width="14" height="13" rx="2.5"/><path d="m9 12 4 2.5L9 17Z"/></svg></span><span class="rail-label">Emby 片库</span></button>
+      <button id="webdav-nav" class="rail-btn" type="button" aria-label="WebDAV"><span class="rail-icon"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17H6a4 4 0 0 1-1-7.87A7 7 0 0 1 18.8 8a4.5 4.5 0 0 1-.3 9H17"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></span><span class="rail-label">WebDAV</span></button>
+      <button class="rail-btn" data-view="recent" title="最近观看" aria-label="最近观看"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 10a8.5 8.5 0 1 1 .8 6.2M3.5 4.5V10H9"/><path d="M12 7v5l3 2"/></svg></span><span class="rail-label">最近观看</span></button>
+      <button class="rail-btn" data-view="favorites" title="收藏" aria-label="收藏"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.2 5.7a5.1 5.1 0 0 0-7.2 0L12 6.8l-1-1.1a5.1 5.1 0 0 0-7.2 7.2L12 21l8.2-8.1a5.1 5.1 0 0 0 0-7.2Z"/></svg></span><span class="rail-label">收藏</span></button>
+      <button class="rail-btn" data-view="following" title="追剧" aria-label="追剧"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/><path d="m9 9 2 2 4-4"/></svg></span><span class="rail-label">追剧</span></button>
+      <button class="rail-btn" data-view="resume" title="继续观看" aria-label="继续观看"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4Z"/></svg></span><span class="rail-label">继续观看</span></button>
+      <div class="rail-spacer"></div><button id="refresh" class="rail-btn" title="刷新影库" aria-label="刷新影库"><span class="rail-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 8a8 8 0 0 0-13.6-3L3 8m0-5v5h5M4 16a8 8 0 0 0 13.6 3L21 16m0 5v-5h-5"/></svg></span><span class="rail-label">刷新影库</span></button>
+    </aside>
+    <main>
+      <div id="browse-page">
+      <header class="top"><div><div class="eyebrow">YOUR CINEMA</div><h1 id="heading" tabindex="-1">晚上好，来看点什么？</h1></div>
+        <div class="top-actions"><button id="emby-connect" class="emby-button" type="button">连接 Emby</button><label class="search"><span class="search-icon" aria-hidden="true"><svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span><input id="search" type="search" placeholder="搜索影片" aria-label="搜索影片"><kbd>Ctrl K</kbd></label></div>
+      </header>
+      <section id="hero" class="hero" aria-label="精选影片"><div class="hero-shade"><span id="hero-pill" class="pill">精选影片</span><h2 id="hero-title"></h2><p id="hero-meta"></p><button id="hero-play" class="primary">▶　播放影片</button></div></section>
+      <div id="status" class="status" role="status">正在读取影库…</div>
+      <section id="emby-hub" class="emby-hub" aria-labelledby="hub-title" hidden>
+        <div class="hub-main"><span class="hub-eyebrow">CONNECTED LIBRARY</span><h2 id="hub-title">Emby 片库</h2><p id="hub-description"></p><div id="hub-meta" class="hub-meta"></div></div>
+        <button id="hub-action" class="hub-action" type="button">管理连接</button>
+      </section>
+      <nav id="emby-categories" class="categories" aria-label="Emby 分类" hidden></nav>
+      <section id="emby-subfilters" class="emby-subfilters" aria-label="分类内细分" hidden><div class="subfilter-head"><div><span class="hub-eyebrow">REFINE YOUR LIBRARY</span><h3 id="subfilter-title">分类内细分</h3></div><button id="subfilter-reset" class="text-button" type="button">重置筛选</button></div><div class="subfilter-genres" id="subfilter-genres" role="group" aria-label="影片类型"></div><div class="subfilter-controls"><label>年份<select id="subfilter-year" aria-label="筛选年份"><option value="">全部年份</option></select></label><label id="subfilter-status-label">剧集状态<select id="subfilter-status" aria-label="筛选剧集状态"><option value="">全部状态</option><option value="Continuing">连载中</option><option value="Ended">已完结</option></select></label><label>观看状态<select id="subfilter-watched" aria-label="筛选观看状态"><option value="">全部作品</option><option value="unplayed">未看过</option><option value="played">已看过</option></select></label><span id="subfilter-summary" class="subfilter-summary"></span></div><p id="subfilter-message" class="subfilter-message" role="status"></p></section><div id="emby-breadcrumb" class="breadcrumb" hidden></div>
+      <div id="category-feedback" class="category-feedback" role="status" hidden><span id="category-message"></span><button id="category-retry" type="button" hidden>重试</button></div>
+      <section id="season-browser" class="season-browser" aria-label="剧集分季" hidden>
+        <div class="season-browser-head"><div><span class="season-eyebrow">分季观看</span><h2 id="season-series-title"></h2><p id="season-summary" role="status"></p></div><button id="season-detail" class="season-detail" type="button">查看剧集梗概 →</button></div>
+        <nav id="season-tabs" class="season-tabs" aria-label="选择剧集季"></nav>
+      </section>
+      <button id="context-back" class="text-button" type="button" hidden>← 返回影片详情</button>
+      <section id="resume-section" class="shelf" hidden><div class="section-head"><h2>继续观看</h2><button data-view="resume" class="text-button">查看全部 →</button></div><div id="resume-grid" class="grid compact"></div></section>
+      <section id="next-section" class="shelf" hidden><div class="section-head"><h2>接着追剧</h2><button data-view="following" class="text-button">查看全部 →</button></div><div id="next-grid" class="grid compact"></div></section>
+      <section id="recent-section" class="shelf"><div class="section-head"><h2>最近观看</h2><button data-view="recent" class="text-button">查看全部 →</button></div><div id="recent-grid" class="grid compact"></div></section>
+      <section class="shelf"><div class="section-head"><h2 id="all-title">全部影片</h2><span id="count" class="count"></span></div><div id="grid" class="grid"></div><button id="more" class="more" type="button" hidden>加载更多</button></section>
+      <footer>本机影库与 Emby · 使用原有 mpv 播放配置</footer>
+      </div>
+      <section id="detail-page" class="detail-page" aria-labelledby="detail-title" hidden>
+        <button id="detail-back" class="detail-back" type="button">← 返回片库</button>
+        <div id="detail-hero" class="detail-hero"><div class="detail-gradient"></div></div>
+        <div class="detail-layout">
+          <div id="detail-poster" class="detail-poster" aria-hidden="true"></div>
+          <div class="detail-copy">
+            <div id="detail-source" class="detail-source"></div>
+            <h1 id="detail-title"></h1>
+            <p id="detail-context" class="detail-context" hidden></p>
+            <p id="detail-tagline" class="detail-tagline" hidden></p>
+            <div id="detail-meta" class="detail-meta"></div><div id="detail-broadcast" class="detail-broadcast" hidden></div>
+            <div id="detail-genres" class="detail-genres"></div>
+            <section id="detail-sources" class="source-panel" aria-labelledby="detail-sources-title" hidden>
+              <div class="source-heading"><div><span class="source-eyebrow">PLAYBACK VERSION</span><h2 id="detail-sources-title">选择播放片源</h2></div><span id="detail-source-count" class="source-count"></span></div>
+              <div id="detail-source-options" class="source-options" role="radiogroup" aria-label="播放片源"></div>
+              <p id="detail-source-note" class="source-note" role="status"></p>
+            </section>
+            <div class="detail-actions"><button id="detail-play" class="primary" type="button">▶　播放影片</button><button id="detail-restart" class="detail-secondary" type="button" hidden>从头播放</button><button id="detail-browse" class="detail-secondary" type="button" hidden>浏览内容 →</button><button id="detail-related" class="detail-secondary" type="button" hidden>浏览整剧 →</button><button id="detail-favorite" class="detail-secondary" type="button">♡ 收藏</button><button id="detail-follow" class="detail-secondary" type="button" hidden>＋ 追剧</button></div>
+            <div id="detail-status" class="detail-status" role="status"></div>
+            <p id="detail-progress" class="detail-progress" hidden></p>
+            <details id="detail-subtitles" class="subtitle-panel" hidden>
+              <summary><span class="subtitle-icon" aria-hidden="true">CC</span><span>字幕下载<small id="subtitle-context">按片名与版本匹配</small></span><span class="subtitle-chevron" aria-hidden="true">⌄</span></summary>
+              <div class="subtitle-content">
+                <form id="subtitle-form" class="subtitle-search">
+                  <label>剧名 / 片名<input id="subtitle-query" maxlength="100" required autocomplete="off"></label>
+                  <label>字幕语言<select id="subtitle-language"><option value="all">全部语言</option><option value="chinese">中文字幕</option><option value="bilingual">双语字幕</option></select></label>
+                  <button id="subtitle-search-button" class="detail-secondary" type="submit">搜索字幕</button>
+                </form>
+                <p id="subtitle-status" class="subtitle-status" role="status" aria-live="polite">按剧名、季集数和当前片源匹配，可修改名称重试。</p>
+                <div id="subtitle-providers" class="subtitle-providers"></div>
+                <div id="subtitle-results" class="subtitle-results"></div>
+                <p class="subtitle-help">下载后可将字幕文件拖入 mpv。字幕包需先解压；不同剪辑版本的时间轴可能不同。</p>
+              </div>
+            </details>
+            <h2 id="detail-primary-heading" class="detail-section-title">影片简介</h2>
+            <p id="detail-overview" class="detail-overview"></p>
+            <div id="detail-secondary" hidden><h2 id="detail-secondary-heading" class="detail-section-title"></h2><p id="detail-secondary-overview" class="detail-overview"></p></div>
+            <div id="detail-people" hidden><h2 class="detail-section-title">演职员</h2><div id="detail-people-list" class="detail-people-list"></div></div>
+          </div>
+        </div>
+      </section>
+    <section id="webdav-page" class="dav-page" aria-labelledby="dav-title" hidden>
+<header class="dav-header"><div><span class="dav-eyebrow">YOUR CONNECTIONS</span><h1 id="dav-title">WebDAV</h1><p>连接你的云端片库，用熟悉的 mpv 观看。</p></div><button id="dav-add" class="primary" type="button">＋ 添加连接</button></header>
+<section class="dav-connections-section" aria-label="WebDAV 连接"><div id="dav-connections" class="dav-connections"></div></section>
+<div id="dav-feedback" role="status" class="dav-feedback"></div>
+<section id="dav-browser" class="dav-browser" hidden><div class="dav-browser-tools"><nav id="dav-breadcrumb" aria-label="WebDAV 路径"></nav><div class="dav-tools"><input id="dav-search" type="search" aria-label="搜索当前目录" placeholder="搜索当前目录"><button id="dav-reload" class="text-button" type="button">刷新目录</button><button id="dav-disconnect" class="text-button" type="button">断开连接</button></div></div><div class="dav-list-heading"><div class="dav-view-options"><span id="dav-item-count"></span><div class="dav-view-switch" role="group" aria-label="WebDAV 显示方式"><button id="dav-view-wall" type="button" aria-label="海报墙" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="8" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/></svg></button><button id="dav-view-list" type="button" aria-label="文件列表" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button></div></div><label><input id="dav-only-video" type="checkbox" checked> 只看目录和视频</label></div><div id="dav-files" class="dav-files" aria-label="WebDAV 文件"></div><button id="dav-more" type="button" class="more" hidden>加载更多</button></section>
+<div id="dav-empty" class="dav-empty"><svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="7" y="12" width="50" height="40" rx="10"/><path d="m28 25 13 8-13 8Z"/><path d="M18 6v12M46 6v12"/></svg><h2>你的影片，不止在本机</h2><p>添加 WebDAV 地址，直接浏览文件夹与播放影片。<br>支持 NAS、网盘及标准 WebDAV 服务。</p><button id="dav-empty-add" class="primary" type="button">添加第一个连接</button><span>原画质直读 · 支持拖动进度 · 保留播放进度</span></div>
+</section></main>
+  </div>
+  <dialog id="emby-dialog" aria-labelledby="emby-title"><form id="emby-form"><div class="dialog-eyebrow">MEDIA LIBRARY</div><h2 id="emby-title">连接 Emby</h2><p>填写你的 Emby 服务器地址与账号。登录成功后可选择记住连接；密码不会保存。</p><label>服务器地址<input id="emby-url" name="url" type="url" placeholder="https://media.example.com" autocomplete="url" required></label><label>用户名<input id="emby-user" name="username" autocomplete="username" required></label><label>密码<input id="emby-password" name="password" type="password" autocomplete="current-password" required></label><label class="remember-choice"><input id="emby-remember" type="checkbox" checked><span>记住连接 <small>令牌仅在 Windows 当前用户下加密保存</small></span></label><div id="emby-message" class="dialog-message" role="status"></div><div class="dialog-actions"><button id="emby-logout" type="button" class="text-button" hidden>断开连接</button><button id="emby-cancel" type="button" class="text-button">取消</button><button id="emby-submit" type="submit" class="primary">连接并读取片库</button></div></form></dialog>
+  <link rel="stylesheet" href="/webdav.css"><dialog id="dav-dialog" class="dav-dialog"><form id="dav-form"><div class="dav-dialog-head"><div><span class="dav-eyebrow">NEW CONNECTION</span><h2>添加 WebDAV 连接</h2></div><button id="dav-cancel" class="text-button" type="button" aria-label="关闭 WebDAV 连接窗口">关闭</button></div><p>填写服务商提供的 WebDAV 地址，支持自定义端口和目录。</p><label>连接名称<input id="dav-name" name="name" placeholder="例如：家庭 NAS" required maxlength="80" autocomplete="off"></label><label>服务器地址<input id="dav-url" name="url" type="text" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="dav.pikpak.ai 或 https://nas.example.com/dav/" required autocomplete="url" aria-describedby="dav-url-hint"></label><small id="dav-url-hint" style="display:block;color:#819ba8;font-size:11px;margin-top:-6px">只填域名时自动使用 HTTPS；自定义端口和目录可直接填写。</small><div class="dav-form-columns"><label>用户名<input id="dav-user" name="username" autocomplete="username" placeholder="匿名访问可留空"></label><label>密码<input id="dav-password" name="password" type="password" autocomplete="current-password"></label></div><label class="dav-remember"><input id="dav-remember" type="checkbox"><span>记住连接<small>登录信息仅在 Windows 当前用户下加密保存</small></span></label><div id="dav-form-message" role="status"></div><button id="dav-submit" class="primary" type="submit">连接并浏览</button></form></dialog><script src="/webdav-posters.js" defer></script><script src="/webdav-image-queue.js" defer></script><script src="/webdav-ui.js" defer></script><script src="/detail-presentation.js" defer></script><script src="/person-results.js" defer></script><script src="/app.js" defer></script><script src="/subtitle-ui.js" defer></script>
+</body></html>

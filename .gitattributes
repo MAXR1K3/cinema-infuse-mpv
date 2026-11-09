@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.command text eol=lf
+*.vpy text eol=lf
+*.lua text eol=lf
+*.glsl text eol=lf
+*.ttf binary
+*.ttc binary
+*.otf binary
+*.icc binary
+*.png binary
+*.conf text eol=lf

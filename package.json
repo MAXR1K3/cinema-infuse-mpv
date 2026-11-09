@@ -1,0 +1,14 @@
+{
+  "name": "cinema-infuse-mpv",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local cinema library with Emby, WebDAV, Windows mpv and macOS Infuse",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node platforms/windows/launch.cjs",
+    "test": "node --test apps/cinema/*.test.js platforms/windows/*.test.cjs",
+    "audit:publication": "python tools/audit_publication.py"
+  }
+}

@@ -1,0 +1,55 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const os=require('node:os');
+const net=require('node:net');
+const {spawn}=require('node:child_process');
+const {randomUUID}=require('node:crypto');
+const {createProgressStore}=require('./progress-store');
+const {createPlaybackQueue}=require('./playback-queue');
+const {launchTrackedPlayer}=require('./tracked-player');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(read,predicate) {let last;for(let n=0;n<120;n++){try{const data=await read();last=data;if(predicate(data)) return data;}catch{} await sleep(50);}throw Error('Playback chain timed out: '+JSON.stringify(last));}
+test('real mpv advances in the same process, restores next-item position, and quit at 95% never launches another episode',{timeout:25000},async t=>{
+  const executable=process.env.MPV_TEST_EXE || path.resolve(__dirname,'../../runtime/windows/mpv.exe');
+  try{await fs.access(executable);}catch{t.skip('mpv unavailable');return;}
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'cinema-next-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const rate=8000,data=Buffer.alloc(rate*90*2),header=Buffer.alloc(44);
+  header.write('RIFF');header.writeUInt32LE(data.length+36,4);header.write('WAVEfmt ',8);header.writeUInt32LE(16,16);header.writeUInt16LE(1,20);header.writeUInt16LE(1,22);header.writeUInt32LE(rate,24);header.writeUInt32LE(rate*2,28);header.writeUInt16LE(2,32);header.writeUInt16LE(16,34);header.write('data',36);header.writeUInt32LE(data.length,40);
+  const entries=[];
+  for(let n=1;n<=3;n++) {const media=path.join(root,`e${n}.wav`);await fs.writeFile(media,Buffer.concat([header,data]));entries.push({media,item:{embyId:String(n)},context:{kind:'emby',server:'fixture',userId:'u',itemId:String(n),item:{id:`emby-${n}`}},sourceId:`source${n}`,source:{height:2160,range:'HDR10'},startSeconds:n===2?7:20,title:`Episode ${n}`});}
+  let queue;
+  const store=createProgressStore({directory:root,onUpdate:async(context,record,event)=>{if(event==='start') await queue.ensureNext(context);}});
+  queue=createPlaybackQueue({directory:root,store,resolveNext:async item=>entries[Number(item.embyId)]?.item || null,prepare:async item=>{await sleep(1200);return entries[Number(item.embyId)-1];}});
+  const tracked=await queue.start(entries[0]);
+  const pipe=process.platform==='win32'?`\\\\.\\pipe\\cinema-next-${randomUUID()}`:path.join(root,'mpv.sock');
+  const player=await launchTrackedPlayer({executable,...entries[0],context:entries[0].context,store,tracked,spawnPlayer:(exe,args,options)=>spawn(exe,['--no-config','--vo=null','--ao=null','--terminal=no','--force-window=no','--idle=yes','--pause=yes',`--input-ipc-server=${pipe}`,...args],{...options,windowsHide:true})});
+  player.child.ref();t.after(()=>{if(player.child.exitCode===null)player.child.kill()});
+  const read=async()=>JSON.parse(await fs.readFile(tracked.queueFile,'utf8'));
+  let socket;await until(async()=>{socket=await new Promise((resolve,reject)=>{const s=net.connect(pipe,()=>resolve(s));s.once('error',reject)});return socket;},Boolean);
+  socket.on('error',()=>{});let buffer='',serial=0;const pending=new Map();
+  socket.on('data',chunk=>{buffer+=chunk;let at;while((at=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,at);buffer=buffer.slice(at+1);try{const r=JSON.parse(line);if(pending.has(r.request_id)){pending.get(r.request_id)(r);pending.delete(r.request_id)}}catch{}}});
+  const command=command=>new Promise(resolve=>{const request_id=++serial;pending.set(request_id,resolve);socket.write(JSON.stringify({command,request_id})+'\n')});
+  const firstFile=(await read()).entries[entries[0].media].file;
+  await until(async()=>JSON.parse(await fs.readFile(firstFile,'utf8')),s=>s.position>19);
+  await command(['seek',89.7,'absolute+exact']);await command(['set_property','pause',false]);
+  await until(async()=>JSON.parse(await fs.readFile(firstFile,'utf8')),s=>s.event==='stopped');
+  assert.equal((await read()).entries[entries[0].media].next,undefined,'EOF occurs before the delayed metadata prefetch finishes');
+  await until(read,q=>q.entries[entries[0].media]?.next);
+  const secondFile=(await read()).entries[entries[1].media].file;
+  const second=await until(async()=>JSON.parse(await fs.readFile(secondFile,'utf8')),s=>s.position>=7 && s.position<9);
+  assert.ok(second.position<9,'next item uses its own resume, never the first item start');
+  assert.equal((await command(['get_property','path'])).data,entries[1].media);
+  assert.equal(player.child.exitCode,null,'same mpv process remains alive');
+  await store.poll();
+  await until(read,q=>q.entries[entries[1].media]?.next);
+  await command(['set_property','pause',true]);await command(['seek',86,'absolute+exact']);
+  await until(async()=>JSON.parse(await fs.readFile(secondFile,'utf8')),s=>s.position>=85.5);
+  const exited=new Promise(resolve=>player.child.once('exit',resolve));socket.write(JSON.stringify({command:['quit']})+'\n');await exited;socket.destroy();
+  await store.poll();
+  assert.equal((await store.get(entries[0].context)).completed,true);
+  assert.equal((await store.get(entries[1].context)).completed,true);
+  const thirdFile=(await read()).entries[entries[2].media].file;
+  await assert.rejects(fs.access(thirdFile),'manual exit must not start episode 3');
+});

@@ -1,0 +1,54 @@
+{
+  "tv:235577": {
+    "source": "https://www.disneyplus.com/zh-tw/browse/entity-51d214e4-5fc3-49e2-b658-4d06caddebb9",
+    "label": "Disney+ 中文资料",
+    "roles": {
+      "1156197": {
+        "original": "Kang Bit-na",
+        "zh": "姜光娜",
+        "lead": true
+      },
+      "1613823": {
+        "original": "Han Da-on",
+        "zh": "韩多温",
+        "lead": true
+      }
+    }
+  },
+  "tv:227192": {
+    "source": "https://www.gtv.com.tw/Program/P2025082301/index.html",
+    "label": "八大电视官方角色介绍",
+    "roles": {
+      "1881078": {
+        "original": "Seong Su-ji",
+        "zh": "成秀智",
+        "lead": true,
+        "actorZh": "金知妍"
+      },
+      "3811408": {
+        "original": "Im Ye-rim",
+        "zh": "林艺琳",
+        "lead": true,
+        "actorZh": "姜娜言"
+      },
+      "3874251": {
+        "original": "Myung Ja-eun",
+        "zh": "明子恩",
+        "lead": true,
+        "actorZh": "柳多仁"
+      },
+      "4081155": {
+        "original": "Baek Ha-rin",
+        "zh": "白夏凛",
+        "lead": true,
+        "actorZh": "张多皒"
+      },
+      "4089607": {
+        "original": "Seo Do-ah",
+        "zh": "徐度雅",
+        "lead": true,
+        "actorZh": "申瑟琪"
+      }
+    }
+  }
+}
