@@ -1,6 +1,7 @@
 const $ = selector => document.querySelector(selector);
 let library = { items: [], embyItems: [], recent: [] };
 let view = 'home';
+let ratingSort='';
 let query = '';
 let categoryStack = [];
 let subfilters={genre:'',year:'',status:'',watched:''},subgenres=[],subgenreExpanded=false,subfilterEpoch=0;
@@ -54,6 +55,8 @@ function animatePageIn(element, event) {
   ], { duration: 180, easing: 'cubic-bezier(.22, 1, .36, 1)' });
 }
 const seasonLabel = season => season.unclassified ? '全部集数' : season.indexNumber === 0 ? '特别篇' : Number.isInteger(season.indexNumber) ? `第 ${season.indexNumber} 季` : season.title;
+function ratingCaption(item){const scores=item.ratings || [];const primary=scores.find(x=>x.key===ratingSort) || scores.find(x=>['imdb','douban','tomatoes'].includes(x.key)) || scores[0];return primary?primary.name+' '+primary.display:'';}
+function rememberRatings(id,ratings){for(const rows of [library.items,library.embyItems,categoryItems,searchItems,personItems,favorites,followedSeries,resumeItems,recentItems])for(const item of rows || [])if(item.id===id)item.ratings=ratings;}
 function card(item) {
   const episodeInSeason = view === 'emby' && !query && ['Series', 'Season'].includes(categoryStack.at(-1)?.type) && item.type === 'Episode';
   const episodeNumber = item.type === 'Episode' && Number.isInteger(item.indexNumber) ? `${item.parentIndexNumber == null ? '' : `S${String(item.parentIndexNumber).padStart(2,'0')} · `}E${String(item.indexNumber).padStart(2,'0')}` : '';
@@ -87,6 +90,7 @@ function card(item) {
     const progress = document.createElement('div'); progress.className = 'card-progress'; progress.setAttribute('aria-label', `已看 ${Math.round(item.progress)}%`);
     const fill = document.createElement('span'); fill.style.width = `${Math.min(100, Math.max(0, item.progress))}%`; progress.append(fill); el.append(progress);
   }
+  if(!episodeInSeason && ratingCaption(item)){const score=document.createElement('small');score.className='card-rating';score.textContent=ratingCaption(item);el.append(score);}
   return el;
 }
 function fill(container, items, empty) {
@@ -119,7 +123,11 @@ function render() {
   if (!$('#next-section').hidden) fill($('#next-grid'), nextUp.slice(0, 6), '暂无下一集');
   $('#all-title').textContent = query ? '搜索结果' : currentSeries ? `${activeSeason ? seasonLabel(activeSeason) : '选择季'} · 单集` : view === 'recent' ? '最近观看' : view === 'emby' ? (categoryStack.at(-1)?.name || 'Emby 精选') : view === 'home' ? '为你精选' : view === 'favorites' ? '我的收藏' : view === 'following' ? '我追的剧集' : view === 'resume' ? '继续观看' : view === 'person' ? `${person?.name || '演职员'}的作品` : '本地影片';
   $('#heading').textContent = query ? '找到喜欢的影片' : view === 'recent' ? '最近观看' : currentSeries ? currentSeries.name : view === 'emby' ? 'Emby 片库' : view === 'all' ? '全部影片' : view === 'favorites' ? '我的收藏' : view === 'following' ? '接着追剧' : view === 'resume' ? '继续观看' : view === 'person' ? '演职员作品' : '晚上好，来看点什么？';
-  const shown = view === 'recent' && !query ? recent : filtered;
+  const sequential=view==='emby' && !query && ['Series','Season'].includes(categoryStack.at(-1)?.type);
+  const chosen=view === 'recent' && !query ? recent : filtered;
+  const shown=ratingSort && !sequential?sortRatingItems(chosen,ratingSort):chosen;
+  $('#rating-sort').value=ratingSort;$('#rating-sort').disabled=sequential;$('#rating-sort-scope').hidden=!ratingSort&&!sequential;
+  $('#rating-sort-scope').textContent=sequential?'当前剧集按集数顺序展示。':view==='emby' && !query && categoryStack.length && ['community','critic'].includes(ratingSort)?'按 Emby 完整分类评分分页，高分优先。':'仅对当前已载入作品按所选来源排序；缺失评分排在最后。';
   $('#grid').classList.toggle('episodes-grid', view === 'emby' && !query && (currentSeries || categoryStack.at(-1)?.type === 'Season'));
   if (view === 'emby' && categoryStack.length && categoryLoading && !categoryItems.length) {
     $('#grid').replaceChildren(...Array.from({ length: 8 }, () => {
@@ -133,7 +141,7 @@ function render() {
   if (featured) {
     $('#hero-pill').textContent = featured.id === recent[0]?.id ? '继续欣赏' : '精选影片';
     $('#hero-title').textContent = featured.type === 'Episode' && featured.seriesName ? featured.seriesName : featured.title;
-    $('#hero-meta').textContent = [featured.type === 'Episode' && featured.seriesName ? featured.title : featured.year, featured.rating ? `★ ${Number(featured.rating).toFixed(1)}` : '', '使用 mpv 原画质播放'].filter(Boolean).join('  ·  ');
+    $('#hero-meta').textContent = [featured.type === 'Episode' && featured.seriesName ? featured.title : featured.year, ratingCaption(featured), '使用 mpv 原画质播放'].filter(Boolean).join('  ·  ');
     $('#hero').style.backgroundImage = featured.backdrop ? `url('/art/${featured.id}/backdrop')` : featured.poster ? `linear-gradient(90deg,#0c1725ee,#0c172588),url('/art/${featured.id}/poster')` : '';
     $('#hero-play').textContent = '查看影片详情';
     $('#hero-play').onclick = event => openDetail(featured, event);
@@ -272,6 +280,7 @@ async function loadDetailProgress(item) {
 function showDetail(item, hydrate = true) {
   window.webdavVisible=false;$('#webdav-page').hidden=true;$('#webdav-nav').classList.remove('active');
   detailItem = item;
+  showDetailRatings(item,data=>{if(detailItem?.id===item.id){detailItem.ratings=data.ratings;rememberRatings(item.id,data.ratings);}});
   $('#detail-back').textContent = view === 'person' ? '← 返回演职员作品' : '← 返回片库';
   if(hydrate) {detailProgressRequest++;$('#detail-progress').hidden=true;$('#detail-restart').hidden=true;}
   showSubtitlePanel(item, hydrate);
@@ -289,7 +298,7 @@ function showDetail(item, hydrate = true) {
   $('#detail-title').textContent = story.title;
   $('#detail-context').textContent = story.context;
   $('#detail-context').hidden = !story.context;
-  const meta = [item.year, item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '', item.officialRating, item.seriesName === story.title ? '' : item.seriesName, item.rating ? `★ ${Number(item.rating).toFixed(1)}` : ''].filter(Boolean);
+  const meta = [item.year, item.runtimeMinutes ? `${item.runtimeMinutes} 分钟` : '', item.officialRating, item.seriesName === story.title ? '' : item.seriesName].filter(Boolean);
   $('#detail-meta').textContent = meta.join('　·　') || '影片';
   const broadcast=$('#detail-broadcast');broadcast.replaceChildren();broadcast.hidden=!item.seriesStatus;
   if(item.seriesStatus){const info=item.seriesStatus,badge=document.createElement('span');badge.className='broadcast-badge '+info.kind;badge.textContent=info.label;broadcast.append(badge);const schedule=document.createElement('span');schedule.textContent=[info.schedule,info.nextAirDate?'下集预计 '+new Date(info.nextAirDate).toLocaleString('zh-CN'): ''].filter(Boolean).join(' · ');broadcast.append(schedule);broadcast.title=info.source+'；播出排期不代表片库上架时间';}
@@ -405,7 +414,7 @@ function showDetail(item, hydrate = true) {
   }
 }
 function captureBrowseState() {
-  return {view,query,categoryStack,categoryItems,categoryTotal,categoryHasMore,categoryError,seriesSeasons,activeSeason,
+  return {view,query,ratingSort,categoryStack,categoryItems,categoryTotal,categoryHasMore,categoryError,seriesSeasons,activeSeason,
     subfilters:{...subfilters},subgenres,subgenreExpanded,visibleCount,searchItems,searchTotal,searchHasMore,
     person,personOrigin,personItems,personTotal,personHasMore,personNextStart,personLoading,
     scroll:detailItem ? browseScroll : window.scrollY};
@@ -418,7 +427,7 @@ function saveNavigation() {
 function restoreBrowseState(state={}) {
   // Invalidate work started by a page that the user has already left.
   personLoader.cancel();categoryRequest++;searchRequest++;subfilterEpoch++;detailProgressRequest++;clearTimeout(searchTimer);
-  view=state.view || 'home';query=state.query || '';categoryStack=state.categoryStack || [];categoryItems=state.categoryItems || [];
+  view=state.view || 'home';query=state.query || '';ratingSort=state.ratingSort || '';categoryStack=state.categoryStack || [];categoryItems=state.categoryItems || [];
   categoryTotal=state.categoryTotal || 0;categoryHasMore=!!state.categoryHasMore;categoryError=state.categoryError || '';categoryLoading=false;
   seriesSeasons=state.seriesSeasons || [];activeSeason=state.activeSeason || null;
   subfilters=state.subfilters || {genre:'',year:'',status:'',watched:''};subgenres=state.subgenres || [];subgenreExpanded=!!state.subgenreExpanded;
@@ -550,7 +559,7 @@ async function fetchCategory(start = 0) {
   const request = ++categoryRequest;
   categoryLoading = true; categoryError = ''; render();
   try {
-  const params=new URLSearchParams({parent,start:String(start)});if(categoryStack.length===1)for(const [key,value]of Object.entries(subfilters))if(value)params.set(key,value);
+  const params=new URLSearchParams({parent,start:String(start),ratingSort});if(categoryStack.length===1)for(const [key,value]of Object.entries(subfilters))if(value)params.set(key,value);
   const response = await fetch('/api/emby/items?'+params);
   const data = await response.json();
   if (request !== categoryRequest || categoryStack.at(-1)?.id !== section.id || (section.type === 'Series' && activeSeason?.id !== season)) return;
@@ -617,6 +626,7 @@ document.querySelectorAll('[data-view]').forEach(el => el.addEventListener('clic
   render(); window.scrollTo({ top: 0, behavior: 'instant' });
   if (changed) animatePageIn($('#browse-page'), event);
 }));
+$('#rating-sort').addEventListener('change',event=>{ratingSort=event.target.value;visibleCount=80;const ordered=view==='emby'&&!query&&categoryStack.length&&!['Series','Season'].includes(categoryStack.at(-1)?.type);if(ordered){categoryItems=[];categoryTotal=0;categoryHasMore=false;fetchCategory();}else render();});
 $('#category-retry').addEventListener('click', () => categoryStack.at(-1)?.type === 'Series' && !activeSeason ? fetchSeriesSeasons(categoryStack.at(-1)) : fetchCategory());
 $('#hub-action').addEventListener('click', () => $('#emby-connect').click());
 $('#more').addEventListener('click', async () => {
@@ -678,7 +688,7 @@ $('#emby-logout').addEventListener('click', async () => {
   } catch (error) { $('#emby-message').textContent = error.message; }
   finally { button.disabled = false; }
 });
-document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault();if(window.webdavVisible){$('#dav-search').focus();return;} if (detailItem) closeDetail(); $('#search').focus(); } if (e.key === 'Escape' && detailItem) { if (history.state?.cinemaDetail) history.back(); else closeDetail(); } else if (e.key === 'Escape' && document.activeElement === $('#search')) { $('#search').value = ''; query = ''; render(); $('#search').blur(); } });
+document.addEventListener('keydown', e => { if(document.querySelector('dialog[open]'))return; if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault();if(window.webdavVisible){$('#dav-search').focus();return;} if (detailItem) closeDetail(); $('#search').focus(); } if (e.key === 'Escape' && detailItem) { if (history.state?.cinemaDetail) history.back(); else closeDetail(); } else if (e.key === 'Escape' && document.activeElement === $('#search')) { $('#search').value = ''; query = ''; render(); $('#search').blur(); } });
 load();
 async function refreshPlaybackProgress() {
   if(document.hidden) return;

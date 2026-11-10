@@ -5,7 +5,7 @@ const fsp = fs.promises;
 const path = require('node:path');
 const {spawn}=require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
-const { normalizeEmbyUrl, createSessionStore } = require('./session-store');
+const { normalizeEmbyUrl, createSessionStore,protectSecret,unprotectSecret } = require('./session-store');
 const { createSubtitleService } = require('./subtitles');
 const { createProgressStore, readWatchLater, isCompleted } = require('./progress-store');
 const { launchTrackedPlayer } = require('./tracked-player');
@@ -19,6 +19,8 @@ const webdav=createWebDav({directory:process.env.MPV_WEBDAV_DIRECTORY || path.jo
 const {createDavPosterService}=require('./webdav-poster-service');
 const {readPosterImage}=require('./poster-image');
 const {pipeProxyBody}=require('./proxy-body');
+const {ratingsFromEmby,ratingLinks}=require('./ratings');
+const {createRatingsService}=require('./ratings-service');
 const subtitles = createSubtitleService();
 
 const ROOT = process.env.MPV_LIBRARY_ROOT || path.join(require('node:os').homedir(),'Movies');
@@ -34,6 +36,7 @@ let embyUrl = DEFAULT_EMBY;
 let remembered = false;
 let sessionError = null;
 const USER_DATA = process.env.MPV_LIBRARY_USER_DATA || path.join(require('node:os').homedir(),'.cinema-infuse','user-data.json');
+const ratingsService=createRatingsService({file:process.env.MPV_RATINGS_FILE || path.join(path.dirname(USER_DATA),'ratings-settings.json'),protect:protectSecret,unprotect:unprotectSecret});
 const WATCH_LATER=process.env.MPV_WATCH_LATER_DIR || path.join(path.dirname(MPV),'portable_config','cache','watch_later');
 const progressDirectory=process.env.MPV_PROGRESS_DIR || path.join(path.dirname(USER_DATA),'playback-progress');
 const progressStore = createProgressStore({directory:progressDirectory,onUpdate:reportProgress});
@@ -97,6 +100,7 @@ function catalogItem(item) {
     backdrop: !!item.BackdropImageTags?.length,
     overview: item.Overview || '', genres: item.Genres || [], rating: item.CommunityRating || null,
     originalTitle: item.OriginalTitle || '',
+    ratings:ratingsFromEmby(item),ratingLinks:ratingLinks(item),ratingData:{Name:item.Name,ProviderIds:item.ProviderIds,CommunityRating:item.CommunityRating,CriticRating:item.CriticRating,Ratings:item.Ratings},
     mediaSourceId: String(item.MediaSources?.[0]?.Id || item.Id),
     path: item.Path || '', type: item.Type || '', folder: !!item.IsFolder,
     seriesName: item.SeriesName || '', seriesId: item.SeriesId ? String(item.SeriesId) : '',
@@ -113,9 +117,9 @@ function catalogItem(item) {
   };
 }
 
-function publicEmbyItem({id,title,year,poster,backdrop,overview,genres,rating,type,folder,seriesName,seriesId,seasonId,indexNumber,indexNumberEnd,parentIndexNumber,favorite,progress,positionSeconds,durationSeconds,lastPlayedAt,completed}) {
+function publicEmbyItem({id,title,year,poster,backdrop,overview,genres,rating,ratings,ratingLinks,type,folder,seriesName,seriesId,seasonId,indexNumber,indexNumberEnd,parentIndexNumber,favorite,progress,positionSeconds,durationSeconds,lastPlayedAt,completed}) {
   const watched=isCompleted({positionSeconds,durationSeconds,completed});
-  return { id,title,year,poster,backdrop,overview,genres,rating,type,folder,seriesName,seriesId,seasonId,indexNumber,indexNumberEnd,parentIndexNumber,favorite,progress:watched ? 100 : progress,resumeSeconds:watched ? 0 : positionSeconds || 0,durationSeconds:durationSeconds || 0,watchedAt:lastPlayedAt || '',completed:watched,source:'emby' };
+  return { id,title,year,poster,backdrop,overview,genres,rating,ratings,ratingLinks,type,folder,seriesName,seriesId,seasonId,indexNumber,indexNumberEnd,parentIndexNumber,favorite,progress:watched ? 100 : progress,resumeSeconds:watched ? 0 : positionSeconds || 0,durationSeconds:durationSeconds || 0,watchedAt:lastPlayedAt || '',completed:watched,source:'emby' };
 }
 
 function progressContext(item, local = false) {
@@ -286,7 +290,7 @@ function clearEmbyCatalog() {
   creditAccountVersion++;
   embyMatched = 0; embyError = null; embyCatalog = []; embyById.clear(); embyViews = [];
   activeStreams.clear();
-  for (const item of items) for (const key of ['embyId','embyPoster','embyBackdrop','embyOverview','embyGenres','embyRating']) delete item[key];
+  for (const item of items) for (const key of ['embyId','embyPoster','embyBackdrop','embyOverview','embyGenres','embyRating','embyRatings','embyRatingLinks']) delete item[key];
 }
 
 async function restoreEmbySession() {
@@ -328,7 +332,7 @@ async function enrichFromEmby() {
     embyViews = (viewsData.Items || []).filter(view => view.Id).map(view => ({ id: String(view.Id), name: view.Name || '未命名分类', type: view.CollectionType || '' }));
     // The root query is only a small preview. Emby views are paged on demand;
     // scanning tens of thousands of episodes into memory crashes the local server.
-    const q = new URLSearchParams({ Recursive: 'true', IncludeItemTypes: 'Movie,Episode,Video', Fields: 'Path,Overview,Genres,MediaSources', EnableImages: 'true', StartIndex: '0', Limit: '100' });
+    const q = new URLSearchParams({ Recursive: 'true', IncludeItemTypes: 'Movie,Episode,Video', Fields: 'Path,Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true', StartIndex: '0', Limit: '100' });
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
     const remote = data.Items || [];
@@ -349,7 +353,7 @@ async function enrichFromEmby() {
         local.embyBackdrop = !!best.BackdropImageTags?.length;
         local.embyOverview = best.Overview || '';
         local.embyGenres = best.Genres || [];
-        local.embyRating = best.CommunityRating || null;
+        local.embyRating = best.CommunityRating || null;local.embyRatings=ratingsFromEmby(best);local.embyRatingLinks=ratingLinks(best);
         if (best.Name) local.title = best.Name;
         if (best.ProductionYear) local.year = String(best.ProductionYear);
         embyMatched++;
@@ -527,6 +531,18 @@ async function main(req, res) {
   if (req.method === 'POST' && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${PORT}`) {
     return json(res, 403, { error: 'Only the local library can start playback' });
   }
+  if(url.pathname==='/api/ratings/settings' && req.method==='GET')return json(res,200,await ratingsService.status());
+  if(url.pathname==='/api/ratings/settings' && req.method==='POST'){
+    try{return json(res,200,await ratingsService.configure(await readJson(req)));}catch(error){return json(res,400,{error:error.message});}
+  }
+  const ratingsItem=url.pathname.match(/^\/api\/emby\/ratings\/([^/]+)$/);
+  if(req.method==='GET' && ratingsItem){
+    if(!embySession)return json(res,401,{error:'请先登录 Emby'});
+    const item=embyById.get(ratingsItem[1]);if(!item)return json(res,404,{error:'影片不在当前影库'});
+    const account=embySession,server=embyUrl,result=await ratingsService.get(item.ratingData || {});
+    if(account!==embySession || server!==embyUrl)return json(res,409,{error:'登录状态已变更，请重新打开详情'});
+    item.ratings=result.ratings;return json(res,200,result);
+  }
   if(req.method==='GET' && url.pathname==='/api/webdav/poster'){
     try{const image=await davPosters.get(url.searchParams.get('id'),url.searchParams.get('path'));if(!image)return json(res,404,{error:'暂无匹配封面'});res.writeHead(200,{'Content-Type':image.type,'Content-Length':image.bytes.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});return res.end(image.bytes);}catch{return json(res,404,{error:'暂无匹配封面'});}
   }
@@ -566,8 +582,8 @@ async function main(req, res) {
       emby: { url: embyUrl, connected: !!embySession, user: embySession?.name || '', remembered, matched: embyMatched, previewCount: embyCatalog.length, error: embyError || sessionError },
       embyViews,
       embyItems: embyCatalog.map(publicEmbyItem),
-      items: items.map(({id,title,year,poster,backdrop,embyPoster,embyBackdrop,embyOverview,embyGenres,embyRating,embyId,embyType,embySeriesName}) => ({
-        id,title,year,poster:!!(poster || embyPoster),backdrop:!!(backdrop || embyBackdrop),overview:embyOverview || '',genres:embyGenres || [],rating:embyRating || null,
+      items: items.map(({id,title,year,poster,backdrop,embyPoster,embyBackdrop,embyOverview,embyGenres,embyRating,embyRatings,embyRatingLinks,embyId,embyType,embySeriesName}) => ({
+        id,title,year,poster:!!(poster || embyPoster),backdrop:!!(backdrop || embyBackdrop),overview:embyOverview || '',genres:embyGenres || [],rating:embyRating || null,ratings:embyRatings || [],ratingLinks:embyRatingLinks || [],
         embyId: embySession ? embyId || null : null, type: embySession ? embyType || '' : '', seriesName: embySession ? embySeriesName || '' : '',
         favorite: saved.localFavorites.includes(id)
       })) });
@@ -648,16 +664,18 @@ async function main(req, res) {
     const parent = url.searchParams.get('parent') || '';
     if (!embyViews.some(view => view.id === parent) && !embyById.has(parent)) return json(res, 404, { error: 'Emby 分类不存在' });
     const start = Math.max(0, Math.min(100000, Number(url.searchParams.get('start')) || 0));
-    const section=embyViews.find(x=>x.id===parent),filters=parseSubfilters(url.searchParams);
+    const section=embyViews.find(x=>x.id===parent),filters=parseSubfilters(url.searchParams),ratingSort=url.searchParams.get('ratingSort') || '';
+    if(!['','community','critic','imdb','tomatoes','douban','metacritic'].includes(ratingSort))return json(res,400,{error:'评分排序无效'});
     if(section && (filters.year || filters.status || filters.watched)){
       if(filters.status && section.type!=='tvshows')return json(res,400,{error:'连载状态仅适用于剧集'});
-      const data=await subcategories.browse({parent,kind:section.type==='movies'?'Movie':'Series',filters,start});
+      const data=await subcategories.browse({parent,kind:section.type==='movies'?'Movie':'Series',filters,start,sort:ratingSort});
       const page=data.items.map(catalogItem);for(const item of page)embyById.set(item.embyId,item);
       return json(res,200,{...data,items:page.map(publicEmbyItem),start});
     }
-    const sortBy = embyById.get(parent)?.type === 'Season' ? 'IndexNumber' : 'SortName';
-    const q = new URLSearchParams({ ParentId: parent, StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources', EnableImages: 'true', SortBy: sortBy, SortOrder: 'Ascending' });
-    if(section && filters.genre){q.set('GenreIds',filters.genre);q.set('Recursive','true');q.set('IncludeItemTypes',section.type==='movies'?'Movie':'Series');}
+    const sequential=['Season','Series'].includes(embyById.get(parent)?.type),nativeRatingSort=!sequential && ['community','critic'].includes(ratingSort);
+    const sortBy = sequential ? 'IndexNumber' : nativeRatingSort ? (ratingSort==='community'?'CommunityRating':'CriticRating')+',SortName' : 'SortName';
+    const q = new URLSearchParams({ ParentId: parent, StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true', SortBy: sortBy, SortOrder: nativeRatingSort?'Descending':'Ascending' });
+    if(section && (filters.genre || nativeRatingSort)){if(filters.genre)q.set('GenreIds',filters.genre);q.set('Recursive','true');q.set('IncludeItemTypes',section.type==='movies'?'Movie':section.type==='tvshows'?'Series':'Movie,Series,Video');}
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
     const page = (data.Items || []).filter(item => item.Id).map(catalogItem);
@@ -669,7 +687,7 @@ async function main(req, res) {
     const term = (url.searchParams.get('q') || '').trim().slice(0, 120);
     if (!term) return json(res, 200, { items: [], total: 0, hasMore: false });
     const start = Math.max(0, Math.min(100000, Number(url.searchParams.get('start')) || 0));
-    const q = new URLSearchParams({ SearchTerm: term, Recursive: 'true', IncludeItemTypes: 'Movie,Series,Episode,Video', StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources', EnableImages: 'true' });
+    const q = new URLSearchParams({ SearchTerm: term, Recursive: 'true', IncludeItemTypes: 'Movie,Series,Episode,Video', StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true' });
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
     const page = (data.Items || []).filter(item => item.Id).map(catalogItem);
@@ -739,7 +757,7 @@ async function main(req, res) {
     const local = saved.localFavorites.map(id => byId.get(id)).filter(Boolean).map(item => ({
       id: item.id, title: item.title, year: item.year,
       poster: !!(item.poster || item.embyPoster), backdrop: !!(item.backdrop || item.embyBackdrop),
-      overview: item.embyOverview || '', genres: item.embyGenres || [], rating: item.embyRating || null,
+      overview: item.embyOverview || '', genres: item.embyGenres || [], rating: item.embyRating || null,ratings:item.embyRatings || [],ratingLinks:item.embyRatingLinks || [],
       favorite: true
     }));
     let remote = [], error = null;
@@ -1073,7 +1091,7 @@ async function main(req, res) {
     } catch (e) { return json(res, 503, { error: `无法打开影片：${e.message}` }); }
   }
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
-  const files = { '/webdav-image-queue.js':'webdav-image-queue.js', '/webdav-posters.js':'webdav-posters.js','/webdav-ui.js':'webdav-ui.js','/webdav.css':'webdav.css','/': 'index.html', '/app.css': 'app.css', '/emby.css': 'emby.css', '/app.js': 'app.js', '/detail-presentation.js': 'detail-presentation.js', '/subtitle-ui.js':'subtitle-ui.js', '/person-results.js':'person-results.js' };
+  const files = { '/ratings.js':'ratings.js','/ratings-ui.js':'ratings-ui.js','/ratings.css':'ratings.css', '/webdav-image-queue.js':'webdav-image-queue.js', '/webdav-posters.js':'webdav-posters.js','/webdav-ui.js':'webdav-ui.js','/webdav.css':'webdav.css','/': 'index.html', '/app.css': 'app.css', '/emby.css': 'emby.css', '/app.js': 'app.js', '/detail-presentation.js': 'detail-presentation.js', '/subtitle-ui.js':'subtitle-ui.js', '/person-results.js':'person-results.js' };
   const name = files[url.pathname];
   if (!name) return json(res, 404, { error: 'Not found' });
   const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html';

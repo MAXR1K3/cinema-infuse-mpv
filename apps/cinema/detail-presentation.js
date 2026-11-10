@@ -29,6 +29,7 @@ function enrichDetailItem(item, remote) {
     series: remote.series,
     collection: remote.collection,
     people: remote.people || item.people,
+    ratings:remote.ratings || item.ratings || [],ratingLinks:remote.ratingLinks || item.ratingLinks || [],
     peopleFromSeries:remote.peopleFromSeries,
     seriesStatus:remote.seriesStatus,
     genres: remote.genres?.length ? remote.genres : item.genres,

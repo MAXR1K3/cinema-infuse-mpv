@@ -4,7 +4,7 @@ import json, re
 
 ROOT=Path(__file__).resolve().parents[1]
 SKIP={'.git','node_modules','downloads','staging','dist','runtime','__pycache__','.data'}
-PRIVATE={'emby-session.json','emby-server.json','user-data.json','progress.json','config.local.json','watch_history.jsonl','file_browser_favourites.txt'}
+PRIVATE={'ratings-settings.json','emby-session.json','emby-server.json','user-data.json','progress.json','config.local.json','watch_history.jsonl','file_browser_favourites.txt'}
 TEXT={'.js','.cjs','.json','.html','.css','.md','.txt','.lua','.vpy','.py','.conf','.yml','.yaml','.gitignore','.gitattributes'}
 def check():
     errors=[];files=[]

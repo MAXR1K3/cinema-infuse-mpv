@@ -19,6 +19,7 @@ platforms/macos/staging/
 **/playback-progress/
 **/watch_later/
 **/emby-session.json
+**/ratings-settings.json
 **/emby-server.json
 **/user-data.json
 **/webdav/*.json
