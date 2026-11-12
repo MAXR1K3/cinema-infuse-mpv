@@ -100,7 +100,7 @@ function catalogItem(item) {
     backdrop: !!item.BackdropImageTags?.length,
     overview: item.Overview || '', genres: item.Genres || [], rating: item.CommunityRating || null,
     originalTitle: item.OriginalTitle || '',
-    ratings:ratingsFromEmby(item),ratingLinks:ratingLinks(item),ratingData:{Name:item.Name,OriginalTitle:item.OriginalTitle,ProductionYear:item.ProductionYear,ProviderIds:item.ProviderIds,CommunityRating:item.CommunityRating,CriticRating:item.CriticRating,Ratings:item.Ratings},
+    ratings:ratingsFromEmby(item),ratingLinks:ratingLinks(item),ratingData:{Name:item.Name,Type:item.Type,OriginalTitle:item.OriginalTitle,ProductionYear:item.ProductionYear,ProviderIds:item.ProviderIds,CommunityRating:item.CommunityRating,CriticRating:item.CriticRating,Ratings:item.Ratings},
     mediaSourceId: String(item.MediaSources?.[0]?.Id || item.Id),
     path: item.Path || '', type: item.Type || '', folder: !!item.IsFolder,
     seriesName: item.SeriesName || '', seriesId: item.SeriesId ? String(item.SeriesId) : '',
@@ -532,6 +532,7 @@ async function main(req, res) {
     return json(res, 403, { error: 'Only the local library can start playback' });
   }
   if(url.pathname==='/api/ratings/settings' && req.method==='GET')return json(res,200,await ratingsService.status());
+  if(url.pathname==='/api/ratings/test' && req.method==='POST')return json(res,200,await ratingsService.validate());
   if(url.pathname==='/api/ratings/settings' && req.method==='POST'){
     try{return json(res,200,await ratingsService.configure(await readJson(req)));}catch(error){return json(res,400,{error:error.message});}
   }
