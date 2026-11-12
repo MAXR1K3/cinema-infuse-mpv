@@ -8,7 +8,7 @@
    const name=document.createElement('span');name.className='media-rating-name';name.textContent=RATING_NAMES[key];
    const value=document.createElement('strong');value.textContent=score?.display || '暂无评分';
    const note=document.createElement('small');note.textContent=score?.via || (key==='douban'?'服务器未提供具名评分':'需具名资料或 OMDb 接口');card.append(name,value,note);
-   const link=links.find(x=>x.key===key);if(link){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='前往 '+link.name+' ↗';card.append(a);}holder.append(card);
+   const link=links.find(x=>x.key===key);if(link?.url){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=(link.mode==='direct'?'影片主页':'搜索候选')+' ↗';a.title=link.reason || '';card.append(a);}else if(link){const hint=document.createElement('small');hint.textContent=link.reason;card.append(hint);}holder.append(card);
   }
   $('#detail-rating-note').textContent=data.message || 'Emby 社区/影评分保留服务器口径；未明确原平台的分数不冒充 IMDb、烂番茄或豆瓣。';
  }

@@ -13,7 +13,7 @@ function filterSubitems(items,filters){return items.filter(x=>{
  if(filters.watched && x.UserData?.Played!==(filters.watched==='played'))return false;
  return true;
 });}
-function compact(x){const keys=['Id','Name','Type','IsFolder','ProductionYear','ImageTags','BackdropImageTags','PrimaryImageTag','Status','UserData','CommunityRating','CriticRating','Ratings','ProviderIds','Genres'];return Object.fromEntries(keys.filter(k=>x[k]!==undefined).map(k=>[k,x[k]]));}
+function compact(x){const keys=['Id','Name','OriginalTitle','Type','IsFolder','ProductionYear','ImageTags','BackdropImageTags','PrimaryImageTag','Status','UserData','CommunityRating','CriticRating','Ratings','ProviderIds','Genres'];return Object.fromEntries(keys.filter(k=>x[k]!==undefined).map(k=>[k,x[k]]));}
 function createSubcategoryService({request,account}){
  const cache=new Map();let queue=Promise.resolve(),revision=0;
  async function index(parent,kind,genre){
@@ -22,7 +22,7 @@ function createSubcategoryService({request,account}){
   if(!cached || cached.expires<Date.now()){
    cached={expires:Date.now()+300000};cache.set(key,cached);
    cached.promise=(queue=queue.catch(()=>{}).then(async()=>{
-    same();const page=async(start,limit)=>{same();const q=new URLSearchParams({ParentId:parent,Recursive:'true',IncludeItemTypes:kind,StartIndex:String(start),Limit:String(limit),Fields:'Status,Genres,ProviderIds',EnableUserData:'true',EnableImages:'true',SortBy:'SortName',SortOrder:'Ascending'});if(genre)q.set('GenreIds',genre);const data=await request(q);same();return data;};
+    same();const page=async(start,limit)=>{same();const q=new URLSearchParams({ParentId:parent,Recursive:'true',IncludeItemTypes:kind,StartIndex:String(start),Limit:String(limit),Fields:'Status,Genres,ProviderIds,OriginalTitle',EnableUserData:'true',EnableImages:'true',SortBy:'SortName',SortOrder:'Ascending'});if(genre)q.set('GenreIds',genre);const data=await request(q);same();return data;};
     const first=await page(0,1000),total=Number(first.TotalRecordCount),raw=first.Items || [];
     if(!Number.isSafeInteger(total)||total<0||total>100000)throw Error('服务器未提供可靠的分类总数，暂时无法精确细分');
     if(total && !raw.length)throw Error('分类索引未完整返回');

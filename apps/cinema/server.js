@@ -100,7 +100,7 @@ function catalogItem(item) {
     backdrop: !!item.BackdropImageTags?.length,
     overview: item.Overview || '', genres: item.Genres || [], rating: item.CommunityRating || null,
     originalTitle: item.OriginalTitle || '',
-    ratings:ratingsFromEmby(item),ratingLinks:ratingLinks(item),ratingData:{Name:item.Name,ProviderIds:item.ProviderIds,CommunityRating:item.CommunityRating,CriticRating:item.CriticRating,Ratings:item.Ratings},
+    ratings:ratingsFromEmby(item),ratingLinks:ratingLinks(item),ratingData:{Name:item.Name,OriginalTitle:item.OriginalTitle,ProductionYear:item.ProductionYear,ProviderIds:item.ProviderIds,CommunityRating:item.CommunityRating,CriticRating:item.CriticRating,Ratings:item.Ratings},
     mediaSourceId: String(item.MediaSources?.[0]?.Id || item.Id),
     path: item.Path || '', type: item.Type || '', folder: !!item.IsFolder,
     seriesName: item.SeriesName || '', seriesId: item.SeriesId ? String(item.SeriesId) : '',
@@ -332,7 +332,7 @@ async function enrichFromEmby() {
     embyViews = (viewsData.Items || []).filter(view => view.Id).map(view => ({ id: String(view.Id), name: view.Name || '未命名分类', type: view.CollectionType || '' }));
     // The root query is only a small preview. Emby views are paged on demand;
     // scanning tens of thousands of episodes into memory crashes the local server.
-    const q = new URLSearchParams({ Recursive: 'true', IncludeItemTypes: 'Movie,Episode,Video', Fields: 'Path,Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true', StartIndex: '0', Limit: '100' });
+    const q = new URLSearchParams({ Recursive: 'true', IncludeItemTypes: 'Movie,Episode,Video', Fields: 'Path,Overview,Genres,MediaSources,ProviderIds,OriginalTitle', EnableImages: 'true', StartIndex: '0', Limit: '100' });
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
     const remote = data.Items || [];
@@ -674,7 +674,7 @@ async function main(req, res) {
     }
     const sequential=['Season','Series'].includes(embyById.get(parent)?.type),nativeRatingSort=!sequential && ['community','critic'].includes(ratingSort);
     const sortBy = sequential ? 'IndexNumber' : nativeRatingSort ? (ratingSort==='community'?'CommunityRating':'CriticRating')+',SortName' : 'SortName';
-    const q = new URLSearchParams({ ParentId: parent, StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true', SortBy: sortBy, SortOrder: nativeRatingSort?'Descending':'Ascending' });
+    const q = new URLSearchParams({ ParentId: parent, StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds,OriginalTitle', EnableImages: 'true', SortBy: sortBy, SortOrder: nativeRatingSort?'Descending':'Ascending' });
     if(section && (filters.genre || nativeRatingSort)){if(filters.genre)q.set('GenreIds',filters.genre);q.set('Recursive','true');q.set('IncludeItemTypes',section.type==='movies'?'Movie':section.type==='tvshows'?'Series':'Movie,Series,Video');}
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
@@ -687,7 +687,7 @@ async function main(req, res) {
     const term = (url.searchParams.get('q') || '').trim().slice(0, 120);
     if (!term) return json(res, 200, { items: [], total: 0, hasMore: false });
     const start = Math.max(0, Math.min(100000, Number(url.searchParams.get('start')) || 0));
-    const q = new URLSearchParams({ SearchTerm: term, Recursive: 'true', IncludeItemTypes: 'Movie,Series,Episode,Video', StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds', EnableImages: 'true' });
+    const q = new URLSearchParams({ SearchTerm: term, Recursive: 'true', IncludeItemTypes: 'Movie,Series,Episode,Video', StartIndex: String(start), Limit: '100', Fields: 'Overview,Genres,MediaSources,ProviderIds,OriginalTitle', EnableImages: 'true' });
     const response = await embyRequest(`/Users/${encodeURIComponent(embySession.userId)}/Items?${q}`);
     const data = await response.json();
     const page = (data.Items || []).filter(item => item.Id).map(catalogItem);

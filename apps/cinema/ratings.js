@@ -1,9 +1,17 @@
 const RATING_NAMES={community:'Emby 社区',critic:'Emby 影评',imdb:'IMDb',tomatoes:'烂番茄',douban:'豆瓣',metacritic:'Metacritic'};
 function providerIds(raw){return Object.fromEntries(Object.entries(raw.ProviderIds || raw.providerIds || {}).map(([k,v])=>[k.toLowerCase(),String(v)]));}
-function ratingLinks(raw){const ids=providerIds(raw),title=raw.Name || raw.title || '';return [
- {key:'imdb',name:'IMDb',url:/^tt\d{5,12}$/.test(ids.imdb)?`https://www.imdb.com/title/${ids.imdb}/`:'https://www.imdb.com/find/?q='+encodeURIComponent(title)},
- {key:'tomatoes',name:'烂番茄',url:/^(m|tv)\/[a-z0-9_/-]+$/i.test(ids.rottentomatoes || '')?'https://www.rottentomatoes.com/'+ids.rottentomatoes:'https://www.rottentomatoes.com/search?search='+encodeURIComponent(title)},
- {key:'douban',name:'豆瓣',url:/^\d{1,12}$/.test(ids.douban || '')?`https://movie.douban.com/subject/${ids.douban}/`:'https://search.douban.com/movie/subject_search?search_text='+encodeURIComponent(title)}
+function ratingLinks(raw){
+ const ids=providerIds(raw),title=String(raw.Name || raw.title || '').trim(),original=String(raw.OriginalTitle || raw.originalTitle || '').trim();
+ // A Latin-script original is only a search candidate, never a verified match.
+ const latin=value=>/[A-Za-z]/.test(value)&&!/[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Cyrillic}\p{Script=Arabic}]/u.test(value);
+ const foreign=latin(original)?original:latin(title)?title:'';
+ const year=String(raw.ProductionYear || raw.year || '');
+ const query=value=>encodeURIComponent(value+(/^\d{4}$/.test(year)?' '+year:''));
+ function link(key,idUrl,searchTitle,searchBase){return {key,name:RATING_NAMES[key],mode:idUrl?'direct':searchTitle?'search':'unavailable',url:idUrl || (searchTitle?searchBase+query(searchTitle):null),reason:idUrl?'平台 ID 直达':searchTitle?'搜索候选，尚未确认对应影片':'缺少平台 ID 或可用的拉丁字母原名，暂不提供搜索跳转'};}
+ return [
+  link('imdb',/^tt\d{5,12}$/.test(ids.imdb)?`https://www.imdb.com/title/${ids.imdb}/`:null,foreign,'https://www.imdb.com/find/?q='),
+  link('tomatoes',/^(m|tv)\/[a-z0-9_/-]+$/i.test(ids.rottentomatoes || '')?'https://www.rottentomatoes.com/'+ids.rottentomatoes:null,foreign,'https://www.rottentomatoes.com/search?search='),
+  link('douban',/^\d{1,12}$/.test(ids.douban || '')?`https://movie.douban.com/subject/${ids.douban}/`:null,title || original,'https://search.douban.com/movie/subject_search?search_text=')
  ];}
 function makeRating(key,value,via){
  if(value===null || value===undefined || value==='')return null;
