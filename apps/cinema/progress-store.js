@@ -41,8 +41,10 @@ function createProgressStore({ directory, onUpdate = async()=>{} }) {
     const id=randomUUID();
     const session={id,context,sourceId,startSeconds:Number(startSeconds)||0,createdAt:Date.now(),seenPosition:false};
     session.file=path.join(directory,`${id}.json`);
+    const subtitleDirectory=path.join(directory,'subtitles');await fs.mkdir(subtitleDirectory,{recursive:true});
+    session.subtitleFile=path.join(subtitleDirectory,createHash('sha256').update(JSON.stringify([keyFor(context),String(sourceId)])).digest('hex')+'.json');
     await fs.writeFile(path.join(directory,`${id}.session.json`),JSON.stringify(session),'utf8');
-    sessions.set(id,session); return {id,file:session.file};
+    sessions.set(id,session); return {id,file:session.file,subtitleFile:session.subtitleFile};
   }
   async function poll() {
     if(polling) return polling;

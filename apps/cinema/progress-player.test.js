@@ -41,6 +41,11 @@ test('real mpv saves a seek, survives quit/reopen, and marks EOF instead of leav
     return {tracked,command,close,child};
   }
   const first=await player();
+  assert.ok(first.tracked.subtitleFile,'subtitle association has a stable state file');
+  const subtitle=path.join(root,'manual.zh.srt');await fs.writeFile(subtitle,'1\n00:00:01,000 --> 00:00:30,000\nSubtitle persistence proof\n');
+  assert.equal((await first.command(['sub-add',subtitle,'select'])).error,'success');
+  await first.command(['set_property','sub-delay',1.25]);
+  await snapshot(first.tracked.subtitleFile,s=>s.files?.includes(subtitle)&&s.delay===1.25);
   assert.equal((await first.command(['seek',35.25,'absolute+exact'])).error,'success');
   await snapshot(first.tracked.file,s=>Math.abs(s.position-35.25)<0.1);
   await first.close();
@@ -48,6 +53,12 @@ test('real mpv saves a seek, survives quit/reopen, and marks EOF instead of leav
   assert.ok(Math.abs((await store.get(context)).resumeSeconds-35.25)<0.1);
   store=createProgressStore({directory});
   const saved=await store.get(context),second=await player(saved.resumeSeconds);
+  assert.equal(second.tracked.subtitleFile,first.tracked.subtitleFile);
+  await snapshot(second.tracked.subtitleFile,s=>s.files?.includes(subtitle));
+  assert.ok((await second.command(['get_property','track-list'])).data.some(x=>x.type==='sub'&&x.external&&x.selected));
+  assert.equal((await second.command(['get_property','sub-delay'])).data,1.25);
+  await second.command(['set_property','sid','no']);
+  await snapshot(second.tracked.subtitleFile,s=>s.selected==='no');
   const state=await snapshot(second.tracked.file,s=>Math.abs(s.position-35.25)<0.1);
   assert.ok(Math.abs(state.position-saved.resumeSeconds)<0.1);
   await second.command(['seek',89.7,'absolute+exact']);await second.command(['set_property','pause',false]);
@@ -55,6 +66,7 @@ test('real mpv saves a seek, survives quit/reopen, and marks EOF instead of leav
   assert.equal((await store.get(context)).resumeSeconds,0);
   await second.close();
   const credits=await player();
+  assert.equal((await credits.command(['get_property','sid'])).data,false,'explicit subtitle off survives reopen');
   await credits.command(['seek',85.5,'absolute+exact']);
   await snapshot(credits.tracked.file,s=>Math.abs(s.position-85.5)<0.1);
   await credits.close();

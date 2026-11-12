@@ -33,6 +33,7 @@ test('real mpv advances in the same process, restores next-item position, and qu
   const command=command=>new Promise(resolve=>{const request_id=++serial;pending.set(request_id,resolve);socket.write(JSON.stringify({command,request_id})+'\n')});
   const firstFile=(await read()).entries[entries[0].media].file;
   await until(async()=>JSON.parse(await fs.readFile(firstFile,'utf8')),s=>s.position>19);
+  await command(['set_property','sub-delay',3]);
   await command(['seek',89.7,'absolute+exact']);await command(['set_property','pause',false]);
   await until(async()=>JSON.parse(await fs.readFile(firstFile,'utf8')),s=>s.event==='stopped');
   assert.equal((await read()).entries[entries[0].media].next,undefined,'EOF occurs before the delayed metadata prefetch finishes');
@@ -41,6 +42,8 @@ test('real mpv advances in the same process, restores next-item position, and qu
   const second=await until(async()=>JSON.parse(await fs.readFile(secondFile,'utf8')),s=>s.position>=7 && s.position<9);
   assert.ok(second.position<9,'next item uses its own resume, never the first item start');
   assert.equal((await command(['get_property','path'])).data,entries[1].media);
+  assert.equal((await command(['get_property','sub-delay'])).data,0,'subtitle delay from the previous episode must not leak');
+  assert.notEqual((await read()).entries[entries[1].media].subtitleFile,(await read()).entries[entries[0].media].subtitleFile);
   assert.equal(player.child.exitCode,null,'same mpv process remains alive');
   await store.poll();
   await until(read,q=>q.entries[entries[1].media]?.next);

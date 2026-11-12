@@ -6,6 +6,12 @@ const path = require('node:path');
 const { createProgressStore, readWatchLater } = require('./progress-store');
 
 const context = { kind:'emby', server:'https://media.example', userId:'viewer', itemId:'episode1', item:{id:'emby-episode1',title:'本集',type:'Episode'} };
+test('subtitle associations survive new sessions but isolate account, episode and source version',async t=>{
+ const directory=await fixture(t),store=createProgressStore({directory});
+ const first=await store.startSession(context,{sourceId:'4k'}),again=await store.startSession({...context,media:'a-new-signed-url'},{sourceId:'4k'});
+ assert.equal(first.subtitleFile,again.subtitleFile);
+ for(const [other,sourceId] of [[{...context,userId:'other'},'4k'],[{...context,itemId:'episode2'},'4k'],[context,'1080p']])assert.notEqual((await store.startSession(other,{sourceId})).subtitleFile,first.subtitleFile);
+});
 async function fixture(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(),'cinema-progress-'));
   t.after(() => fs.rm(directory,{recursive:true,force:true}));

@@ -8,7 +8,7 @@ function createPlaybackQueue({directory,store,resolveNext,prepare}) {
   async function add(data,entry) {
     const context={...entry.context,queueId:data.id,media:entry.media};
     const tracked=await store.startSession(context,{sourceId:entry.sourceId,startSeconds:entry.startSeconds});
-    data.entries[entry.media]={...entry,context,file:tracked.file};
+    data.entries[entry.media]={...entry,context,file:tracked.file,subtitleFile:tracked.subtitleFile};
     return tracked;
   }
   async function ensureNext(context) {
