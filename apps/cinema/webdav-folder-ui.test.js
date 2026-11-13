@@ -1,0 +1,16 @@
+const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
+test('wall resolves visible folders automatically; movie plays its child, series opens choices without navigating',async()=>{
+ class Node{constructor(){this.children=[];this.events={};this.attrs={};this.classList={toggle(){},add(){},remove(){}};this.value='';this.hidden=false;this.checked=true;}append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node);}}replaceChildren(...nodes){for(const child of this.children)child.parent=null;this.children=[];this.append(...nodes);}replaceWith(node){const p=this.parent;if(p){p.children[p.children.indexOf(this)]=node;node.parent=p;this.parent=null;}}get isConnected(){return !!this.parent;}addEventListener(name,fn){this.events[name]=fn;}setAttribute(k,v){this.attrs[k]=v;}showModal(){this.open=true;}close(){this.open=false;}focus(){}remove(){} }
+ const nodes=new Map(),get=s=>{if(!nodes.has(s))nodes.set(s,new Node());return nodes.get(s);};const body=new Node();
+ const document={querySelector:get,querySelectorAll:()=>[],createElement:()=>new Node(),body};
+ const folder={path:'/dav/Movie/',name:'Movie',directory:true},series={path:'/dav/Show/',name:'Show',directory:true},movie={path:'/dav/Movie/Movie.mkv',name:'Movie.mkv',video:true,size:123};
+ const calls=[];let playing;const fetch=async(url,options)=>{calls.push(url);const key=url.split('/api/webdav/')[1];let data={};if(key==='connections')data={connections:[{id:'c',name:'Fixture',url:'https://fixture.test/dav/'}]};else if(key.startsWith('browse?'))data={connection:{id:'c'},path:'/dav/',breadcrumbs:[],items:[folder,series]};else if(key.startsWith('folder?')){const p=new URL(url,'http://localhost').searchParams.get('path');data={complete:true,items:p===folder.path?[movie]:[{...movie,path:'/dav/Show/E1.mkv',name:'E1.mkv'},{...movie,path:'/dav/Show/E2.mkv',name:'E2.mkv'}]};}else if(key==='play'){playing=JSON.parse(options.body);data={title:'Fixture'};}return {ok:true,json:async()=>data};};
+ get('#dav-folder-media').showModal=function(){this.open=true;};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'webdav-ui.js'),'utf8'),{document,fetch,URL,URLSearchParams,localStorage:{getItem:()=>null},window:{location:{href:'http://localhost/'},createDavImageQueue:()=>({clear(){},observe(){}}),davMediaLabel:name=>({title:name}),scrollTo(){}},history:{replaceState(){}}});
+ await get('#webdav-nav').events.click();for(let n=0;n<20;n++)await new Promise(r=>setImmediate(r));
+ assert.equal(calls.filter(x=>x.includes('/folder?')).length,2,'recognition happens before either folder is clicked');
+ const cards=get('#dav-files').children;assert.equal(cards[0].children[0].attrs['aria-label'],'播放文件夹内影片 Movie');
+ await cards[0].children[0].events.click();assert.equal(playing.path,movie.path);
+ await cards[1].children[0].events.click();const dialog=get('#dav-folder-media');assert.equal(dialog.open,true);assert.equal(dialog.children[2].children.length,2);
+ await dialog.children[2].children[1].events.click();for(let n=0;n<5;n++)await new Promise(r=>setImmediate(r));assert.equal(playing.path,'/dav/Show/E2.mkv');assert.equal(calls.filter(x=>x.includes('/browse?')).length,1,'selection did not navigate into a folder');
+});

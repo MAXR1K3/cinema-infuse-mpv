@@ -17,6 +17,7 @@ const {seriesStatus}=require('./series-status');
 const {createWebDav}=require('./webdav');
 const webdav=createWebDav({directory:process.env.MPV_WEBDAV_DIRECTORY || path.join(process.env.APPDATA || __dirname,'mpv-cinema','webdav')});
 const {createDavPosterService}=require('./webdav-poster-service');
+const davFolders=require('./webdav-folders').createDavFolderService({webdav});
 const {readPosterImage}=require('./poster-image');
 const {pipeProxyBody}=require('./proxy-body');
 const {ratingsFromEmby,ratingLinks}=require('./ratings');
@@ -553,6 +554,9 @@ async function main(req, res) {
   }
   if(req.method==='POST' && url.pathname==='/api/webdav/disconnect'){
     const input=await readJson(req);await webdav.disconnect(input.id);return json(res,200,{ok:true});
+  }
+  if(req.method==='GET' && url.pathname==='/api/webdav/folder'){
+    try{return json(res,200,await davFolders.get(url.searchParams.get('id'),url.searchParams.get('path'),{refresh:url.searchParams.get('refresh')==='1'}));}catch{return json(res,400,{error:'目录暂时无法识别，请刷新或浏览目录'});}
   }
   if(req.method==='GET' && url.pathname==='/api/webdav/browse'){
     try{return json(res,200,await webdav.browse(url.searchParams.get('id'),url.searchParams.get('path'),{refresh:url.searchParams.get('refresh')==='1'}));}catch(error){return json(res,400,{error:error.message});}
