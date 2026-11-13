@@ -55,6 +55,8 @@ test('real mpv saves a seek, survives quit/reopen, and marks EOF instead of leav
   const saved=await store.get(context),second=await player(saved.resumeSeconds);
   assert.equal(second.tracked.subtitleFile,first.tracked.subtitleFile);
   await snapshot(second.tracked.subtitleFile,s=>s.files?.includes(subtitle));
+  // The progress and subtitle Lua scripts run independently; wait for subtitle restoration itself.
+  for(let n=0;n<100;n++){if((await second.command(['get_property','sub-delay'])).data===1.25)break;await sleep(30);}
   assert.ok((await second.command(['get_property','track-list'])).data.some(x=>x.type==='sub'&&x.external&&x.selected));
   assert.equal((await second.command(['get_property','sub-delay'])).data,1.25);
   await second.command(['set_property','sid','no']);

@@ -31,7 +31,7 @@ test('remembered HTTP DAV credentials use their own encrypted vault and restore 
  if(process.platform!=='win32')return t.skip('Windows DPAPI');const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dav-vault-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));const request=async()=>new Response(xml([['/dav/A.mkv',false]]),{status:207});
  const service=createWebDav({directory,request});const {connection}=await service.connect({name:'Private NAS',url:'http://192.168.1.2/dav/',username:'viewer',password:'not-plaintext',remember:true});
  const file=await fs.readFile(path.join(directory,connection.id+'.json'),'utf8');assert.ok(!file.includes('not-plaintext'));assert.ok(!file.includes('viewer'));
- const restored=await createWebDav({directory,request}).list();assert.equal(restored[0].url,'http://192.168.1.2/dav/');assert.equal(restored[0].username,'viewer');
+ const restarted=createWebDav({directory,request});const restored=await restarted.list();assert.equal(restored[0].url,'http://192.168.1.2/dav/');assert.equal(restored[0].username,'viewer');assert.equal((await restarted.browse(connection.id)).items[0].name,'A.mkv');
 });
 test('directory artwork uses only listed safe image files and keeps credentials server-side',async t=>{
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'dav-art-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));let gets=0;
