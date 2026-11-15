@@ -72,3 +72,7 @@ python tools/package_source.py
 可用 `MPV_TEST_EXE` 指定真实 mpv 路径运行合成音频接播/进度测试；未安装时这两项会跳过。Mac 构建后可运行 `node --test platforms/macos/tests/*.cjs`。测试不等同于跨设备 GPU 或 Mac 实机验收。
 
 发布树不包含个人 Emby/WebDAV 账号、服务器地址、观看记录、媒体、日志、私人截图、Python 环境或 GPU 编译缓存。第三方代码保留原许可；本仓库没有用单一许可证重新授权全部内容，见 [第三方说明](docs/third-party.md)。
+
+### 评分与剧集身份补全
+
+打开详情时按 Emby 已有 TMDB 编号读取 TMDB 官方作品页的公开结构化资料，核对平台编号、类型及年份，补齐 IMDb 编号、译名、具名 TMDB 评分及投票数。仅发送作品编号，不发送 Emby 地址、账号、密钥或进度。TMDB 页面结构变化或资料缺失时保留原始数据。IMDb 编号用于已配置的 OMDb 和 TVmaze 查询；OMDb 未收录不代表没有 IMDb 条目。TVmaze 查询不到排期时可显示 TMDB 作品状态，但不会推算下集日期。豆瓣评分仍要求具名来源。

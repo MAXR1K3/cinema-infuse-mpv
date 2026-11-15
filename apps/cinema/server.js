@@ -15,6 +15,7 @@ const { normalizeCredits,createCreditsService } = require('./credits');
 const {createCastEnricher}=require('./cast-enrichment');
 const {seriesStatus}=require('./series-status');
 const seriesSchedules=require('./series-schedule').createSeriesScheduleService();
+const mediaIdentity=require('./media-identity').createMediaIdentityService();
 const {createWebDav}=require('./webdav');
 const webdav=createWebDav({directory:process.env.MPV_WEBDAV_DIRECTORY || path.join(process.env.APPDATA || __dirname,'mpv-cinema','webdav')});
 const {createDavPosterService}=require('./webdav-poster-service');
@@ -542,7 +543,12 @@ async function main(req, res) {
   if(req.method==='GET' && ratingsItem){
     if(!embySession)return json(res,401,{error:'请先登录 Emby'});
     const item=embyById.get(ratingsItem[1]);if(!item)return json(res,404,{error:'影片不在当前影库'});
-    const account=embySession,server=embyUrl,result=await ratingsService.get(item.ratingData || {});
+    const account=embySession,server=embyUrl;
+    const response=await embyRequest(`/Users/${encodeURIComponent(account.userId)}/Items/${encodeURIComponent(ratingsItem[1])}`);
+    let metadata=await response.json();
+    if(String(metadata.Id)!==ratingsItem[1])return json(res,502,{error:'影片身份不一致'});
+    if(['Episode','Season'].includes(metadata.Type)&&metadata.SeriesId){const parentResponse=await embyRequest(`/Users/${encodeURIComponent(account.userId)}/Items/${encodeURIComponent(metadata.SeriesId)}`);const parent=await parentResponse.json();if(parent.Type==='Series'&&String(parent.Id)===String(metadata.SeriesId))metadata=parent;}
+    const result=await ratingsService.get(await mediaIdentity.get(metadata));
     if(account!==embySession || server!==embyUrl)return json(res,409,{error:'登录状态已变更，请重新打开详情'});
     item.ratings=result.ratings;return json(res,200,result);
   }
@@ -731,7 +737,7 @@ async function main(req, res) {
         }
       } catch { /* Keep the playable item detail when related metadata is unavailable. */ }
     }
-    const broadcastPromise=process.env.CINEMA_TVMAZE_SCHEDULE==='0'?Promise.resolve(seriesStatus(creditMetadata)):seriesSchedules.get(creditMetadata).catch(()=>seriesStatus(creditMetadata));
+    const broadcastPromise=process.env.CINEMA_TVMAZE_SCHEDULE==='0'?Promise.resolve(seriesStatus(creditMetadata)):mediaIdentity.get(creditMetadata).then(metadata=>seriesSchedules.get(metadata)).catch(()=>seriesStatus(creditMetadata));
     let sources = [], recommendedSourceId = '', sourcesError = '';
     if (!item.folder && ['Movie', 'Episode', 'Video'].includes(item.type)) {
       try {

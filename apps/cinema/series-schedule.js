@@ -15,13 +15,14 @@ function createSeriesScheduleService({request=fetch,now=Date.now}={}){
   else if(/^tt\d{5,12}$/.test(ids.imdb || '') || /^\d{1,12}$/.test(ids.tvdb || '')){
    const key=/^tt\d{5,12}$/.test(ids.imdb || '')?'imdb':'thetvdb',id=key==='imdb'?ids.imdb:ids.tvdb;
    show=await json('/lookup/shows?'+new URLSearchParams({[key]:id}));if(String(show?.externals?.[key])!==id)show=null;matchedBy='平台 ID';
-  }else{
-   const title=String(raw.OriginalTitle || raw.Name || '').trim(),year=String(raw.ProductionYear || raw.PremiereDate?.slice(0,4) || '');
+  }
+  if(!show && (!ids.imdb&&!ids.tvdb&&!ids.tvmaze || raw.IdentitySource)){
+   const title=String(raw.IdentityTitle || raw.OriginalTitle || raw.Name || '').trim(),year=String(raw.ProductionYear || raw.PremiereDate?.slice(0,4) || '');
    if(title.length<2 || title.length>150 || !/^(18|19|20|21)\d{2}$/.test(year))return {code:'unmatched'};
    const rows=await json('/search/shows?'+new URLSearchParams({q:title}));const matches=(Array.isArray(rows)?rows:[]).map(x=>x.show).filter(x=>x&&normalize(x.name)===normalize(title)&&String(x.premiered || '').slice(0,4)===year&&Number.isInteger(x.id)&&x.id>0);
    if(matches.length!==1)return {code:'unmatched'};
    const candidate=matches[0];show=await json('/shows/'+candidate.id+'?embed=nextepisode');
-   if(show?.id!==candidate.id || normalize(show.name)!==normalize(title) || String(show.premiered || '').slice(0,4)!==year)return {code:'unmatched'};matchedBy='原名与首播年匹配';
+   if(show?.id!==candidate.id || normalize(show.name)!==normalize(title) || String(show.premiered || '').slice(0,4)!==year || ids.imdb&&show.externals?.imdb&&ids.imdb!==show.externals.imdb)return {code:'unmatched'};matchedBy=raw.IdentityTitle?'TMDB 译名与首播年匹配':'原名与首播年匹配';
   }
   if(!show || !Number.isInteger(show.id) || show.id<=0)return {code:'unmatched'};
   return {code:'ok',show,matchedBy};
@@ -29,13 +30,16 @@ function createSeriesScheduleService({request=fetch,now=Date.now}={}){
  return {async get(raw){
   const base=seriesStatus(raw,now());if(!base)return null;
   if(base.availability==='scheduled')return base;
-  const key=JSON.stringify([raw.ProviderIds,raw.OriginalTitle,raw.Name,raw.ProductionYear,raw.PremiereDate]);let record=cache.get(key);
+  const key=JSON.stringify([raw.ProviderIds,raw.IdentityTitle,raw.OriginalTitle,raw.Name,raw.ProductionYear,raw.PremiereDate]);let record=cache.get(key);
   if(!record || record.expires<now()){
    record={expires:now()+3600000};cache.set(key,record);const current=record;
    record.promise=limited(()=>lookup(raw)).catch(()=>({code:'unavailable'})).then(result=>{current.expires=now()+(result.code==='ok'?3600000:60000);return result;});while(cache.size>400)cache.delete(cache.keys().next().value);
   }
   const result=await record.promise;
-  if(result.code!=='ok')return {...base,availability:result.code,schedule:base.kind==='ended'?'已完结；外部排期资料'+(result.code==='unavailable'?'暂时不可用':'未能匹配'):'Emby 未提供排期；'+(result.code==='unavailable'?'TVmaze 查询暂时失败，可稍后重试':'未匹配到唯一的 TVmaze 剧集资料')};
+  if(result.code!=='ok'){
+   if(raw.TmdbStatus&&raw.IdentitySource){const verified=seriesStatus({...raw,Status:raw.TmdbStatus,EndDate:null},now());return {...verified,availability:result.code,source:'TMDB · 作品状态',sourceUrl:raw.IdentitySource,statusConflict:base.label!==verified.label?'Emby：'+base.label+'；TMDB：'+verified.label:'',schedule:verified.kind==='ended'?'TMDB 标记已完结，无后续播出安排':'TMDB 标记连载中；'+(result.code==='unavailable'?'TVmaze 排期暂不可用':'TVmaze 未收录可核对的排期'),nextAirDate:''};}
+   return {...base,availability:result.code,schedule:base.kind==='ended'?'已完结；外部排期资料'+(result.code==='unavailable'?'暂时不可用':'未能匹配'):'Emby 未提供排期；'+(result.code==='unavailable'?'TVmaze 查询暂时失败，可稍后重试':'未匹配到唯一的 TVmaze 剧集资料')};
+  }
   const {show,matchedBy}=result,ended=['Ended','Canceled','Cancelled'].includes(show.status),running=show.status==='Running';
   const format=seriesStatus({Type:'Series',Status:ended?'Ended':running?'Continuing':'',AirDays:show.schedule?.days,AirTime:show.schedule?.time},now());
   const zone=show.network?.country?.timezone || show.webChannel?.country?.timezone;

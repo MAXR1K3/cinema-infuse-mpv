@@ -4,7 +4,7 @@ function createRatingsService({file,protect,unprotect,request=fetch,now=Date.now
  let loaded,key='',revision=0,verification=null,write=Promise.resolve(),active=0;const cache=new Map(),waiting=[];
  async function init(){if(!loaded)loaded=(async()=>{const generation=revision;try{const saved=JSON.parse(await fs.readFile(file,'utf8')),restored=await unprotect(saved.protectedKey);if(generation===revision)key=restored;}catch(e){if(e.code!=='ENOENT')throw Error('评分接口配置无法解密，请清除后重新保存');}})();return loaded;}
  async function limited(task){if(active>=3){if(waiting.length>=30)throw Error('busy');await new Promise(r=>waiting.push(r));}else active++;try{return await task();}finally{const next=waiting.shift();if(next)next();else active--;}}
- const messages={invalid_key:'OMDb 拒绝此 key（Invalid API key）：请核对邮件中的 API key，并确认激活的是同一个 key。',quota:'OMDb 今日请求额度已用完，请稍后再试。',unavailable:'OMDb 服务或网络暂不可用，请稍后测试连接。',no_match:'OMDb 未返回匹配此 IMDb ID 的评分，保留服务器评分。'};
+ const messages={invalid_key:'OMDb 拒绝此 key（Invalid API key）：请核对邮件中的 API key，并确认激活的是同一个 key。',quota:'OMDb 今日请求额度已用完，请稍后再试。',unavailable:'OMDb 服务或网络暂不可用，请稍后测试连接。',no_match:'OMDb 尚未返回匹配此作品的具名评分；已有 IMDb 编号不代表 OMDb 已收录评分。'};
  async function lookup(selector,apiKey){try{
   const byId=typeof selector==='string';const url=new URL('https://www.omdbapi.com/');url.searchParams.set('apikey',apiKey);
   if(byId)url.searchParams.set('i',selector);else{url.searchParams.set('t',selector.title);url.searchParams.set('y',selector.year);url.searchParams.set('type',selector.type);}
@@ -35,7 +35,7 @@ function createRatingsService({file,protect,unprotect,request=fetch,now=Date.now
    if(!key)return {ratings:base,links,message:'未配置 OMDb；IMDb、烂番茄等外部评分暂不补全。豆瓣需服务器提供具名评分。'};
    let selector=id;const title=String(raw.OriginalTitle || '').trim(),year=String(raw.ProductionYear || ''),type={Movie:'movie',Series:'series'}[raw.Type];
    if(!/^tt\d{5,12}$/.test(id || '')){
-    if(!type || !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}\p{M}\p{S}]+$/u.test(title) || !/\p{Script=Latin}/u.test(title) || !/^(18|19|20|21)\d{2}$/.test(year))return {ratings:base,links,code:'missing_identity',message:'Emby 缺少 IMDb ID；也没有可核对的原名、年份与电影/剧集类型，未采用猜测评分。'};
+    if(!type || !/^[\p{Script=Latin}\p{N}\p{P}\p{Z}\p{M}\p{S}]+$/u.test(title) || !/\p{Script=Latin}/u.test(title) || !/^(18|19|20|21)\d{2}$/.test(year))return {ratings:base,links,code:'missing_identity',message:raw.TmdbRating?'已取得 TMDB 具名评分；官方资料未提供 IMDb 编号，暂不能补齐 OMDb 评分。':/^\-/.test(providerIds(raw).tmdb || '')?'服务器提供的是非官方负数 TMDB 编号，无法用于官方资料查询；保留 Emby 评分。':'缺少可核对的平台编号或原名、年份、类型；未采用猜测评分。'};
     selector={title,year,type};
    }
    const cacheKey=JSON.stringify(selector);let record=cache.get(cacheKey);if(!record || record.expires<now()){

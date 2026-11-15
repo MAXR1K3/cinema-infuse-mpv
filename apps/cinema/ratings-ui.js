@@ -2,13 +2,13 @@
  const $=s=>document.querySelector(s);let sequence=0,controller;
  function draw(item,data={}){
   const holder=$('#detail-rating-options'),scores=data.ratings || item.ratings || [],links=data.links || item.ratingLinks || ratingLinks(item);holder.replaceChildren();
-  const keys=['imdb','tomatoes','douban',...(scores.some(x=>x.key==='metacritic')?['metacritic']:[]),'community','critic'];
+  const keys=['imdb','tomatoes','douban',...['tmdb','metacritic'].filter(key=>scores.some(x=>x.key===key)),'community','critic'];
   for(const key of keys){const score=scores.find(x=>x.key===key);if(!score && ['community','critic'].includes(key))continue;
    const card=document.createElement('div');card.className='media-rating'+(!score?' missing':'');card.dataset.provider=key;
    const name=document.createElement('span');name.className='media-rating-name';name.textContent=RATING_NAMES[key];
    const value=document.createElement('strong');value.textContent=score?.display || '暂无评分';
-   const note=document.createElement('small');note.textContent=score?.via || (key==='douban'?'服务器未提供具名评分':'需具名资料或 OMDb 接口');card.append(name,value,note);
-   const link=links.find(x=>x.key===key);if(link?.url){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=(link.mode==='direct'?'影片主页':'搜索候选')+' ↗';a.title=link.reason || '';card.append(a);}else if(link){const hint=document.createElement('small');hint.textContent=link.reason;card.append(hint);}holder.append(card);
+   const note=document.createElement('small');note.textContent=score?.via || (key==='douban'?'服务器未提供具名评分':data.code==='no_match'?'OMDb 尚未收录此项评分':data.code==='missing_identity'?'缺少可核对的作品编号':data.code==='quota'?'OMDb 今日额度已用完':data.code==='unavailable'?'评分服务暂不可用':'需具名资料或 OMDb 接口');card.append(name,value,note);
+   const link=links.find(x=>x.key===key) || (score?.url?{url:score.url,mode:'direct'}:null);if(link?.url){const a=document.createElement('a');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=(link.mode==='direct'?'影片主页':'搜索候选')+' ↗';a.title=link.reason || '';card.append(a);}else if(link){const hint=document.createElement('small');hint.textContent=link.reason;card.append(hint);}holder.append(card);
   }
   $('#detail-rating-note').textContent=data.message || 'Emby 社区/影评分保留服务器口径；未明确原平台的分数不冒充 IMDb、烂番茄或豆瓣。';
  }

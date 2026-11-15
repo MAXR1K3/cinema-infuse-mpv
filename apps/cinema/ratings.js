@@ -1,4 +1,4 @@
-const RATING_NAMES={community:'Emby 社区',critic:'Emby 影评',imdb:'IMDb',tomatoes:'烂番茄',douban:'豆瓣',metacritic:'Metacritic'};
+const RATING_NAMES={community:'Emby 社区',critic:'Emby 影评',imdb:'IMDb',tomatoes:'烂番茄',douban:'豆瓣',metacritic:'Metacritic',tmdb:'TMDB'};
 function providerIds(raw){return Object.fromEntries(Object.entries(raw.ProviderIds || raw.providerIds || {}).map(([k,v])=>[k.toLowerCase(),String(v)]));}
 function ratingLinks(raw){
  const ids=providerIds(raw),title=String(raw.Name || raw.title || '').trim(),original=String(raw.OriginalTitle || raw.originalTitle || '').trim();
@@ -22,7 +22,7 @@ function makeRating(key,value,via){
  return {key,name:RATING_NAMES[key],score,max,display:max===10?score.toFixed(1)+'/10':score+(key==='tomatoes'?'%':'/100'),via};
 }
 function namedRatings(entries,via){const aliases={'internet movie database':'imdb',imdb:'imdb','rotten tomatoes':'tomatoes',rottentomatoes:'tomatoes',douban:'douban','豆瓣':'douban',metacritic:'metacritic'};const map=new Map();for(const entry of Array.isArray(entries)?entries:[]){const key=aliases[String(entry.Source || entry.source || '').trim().toLowerCase()];if(!key)continue;const rating=makeRating(key,entry.Value ?? entry.value,via);if(rating)map.set(key,rating);}return [...map.values()];}
-function ratingsFromEmby(raw){return [makeRating('community',raw.CommunityRating,'Emby 提供；原评分平台未明确'),makeRating('critic',raw.CriticRating,'Emby 提供；影评平台未明确'),...namedRatings(raw.Ratings,'Emby 具名评分字段')].filter(Boolean);}
+function ratingsFromEmby(raw){return [makeRating('community',raw.CommunityRating,'Emby 提供；原评分平台未明确'),makeRating('critic',raw.CriticRating,'Emby 提供；影评平台未明确'),...namedRatings(raw.Ratings,'Emby 具名评分字段'),raw.TmdbRating].filter(Boolean);}
 function ratingsFromOmdb(raw,expectedId){if(raw.Response==='False'||raw.imdbID!==expectedId)return [];const list=namedRatings(raw.Ratings,'OMDb 聚合接口');if(!list.some(x=>x.key==='imdb')){const imdb=makeRating('imdb',raw.imdbRating,'OMDb 聚合接口');if(imdb)list.unshift(imdb);}return list;}
 function sortRatingItems(items,key){if(!RATING_NAMES[key])return items.slice();return items.map((item,index)=>({item,index,score:item.ratings?.find(x=>x.key===key)?.score})).sort((a,b)=>(Number.isFinite(b.score)?b.score:-Infinity)-(Number.isFinite(a.score)?a.score:-Infinity) || a.index-b.index).map(x=>x.item);}
 if(typeof module!=='undefined')module.exports={RATING_NAMES,providerIds,ratingLinks,ratingsFromEmby,ratingsFromOmdb,sortRatingItems};
