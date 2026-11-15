@@ -14,6 +14,7 @@ const { createPlaybackQueue } = require('./playback-queue');
 const { normalizeCredits,createCreditsService } = require('./credits');
 const {createCastEnricher}=require('./cast-enrichment');
 const {seriesStatus}=require('./series-status');
+const seriesSchedules=require('./series-schedule').createSeriesScheduleService();
 const {createWebDav}=require('./webdav');
 const webdav=createWebDav({directory:process.env.MPV_WEBDAV_DIRECTORY || path.join(process.env.APPDATA || __dirname,'mpv-cinema','webdav')});
 const {createDavPosterService}=require('./webdav-poster-service');
@@ -714,8 +715,9 @@ async function main(req, res) {
     const saved = await userData();
     // List responses are deliberately sparse; the full episode has its SeriesId.
     // Only use an explicit Emby relationship, never infer a franchise from a title.
-    const relatedId = item.type === 'Episode' ? item.seriesId : item.type === 'Movie' ? String(full.Collections?.[0]?.Id || '') : '';
-    const relatedType = item.type === 'Episode' ? 'Series' : 'BoxSet';
+    const hasSeriesParent=['Episode','Season'].includes(item.type);
+    const relatedId = hasSeriesParent ? item.seriesId || String(full.ParentId || '') : item.type === 'Movie' ? String(full.Collections?.[0]?.Id || '') : '';
+    const relatedType = hasSeriesParent ? 'Series' : 'BoxSet';
     let related = null, seriesPeople=[],creditMetadata=full;
     if (relatedId && relatedId !== id) {
       try {
@@ -724,11 +726,12 @@ async function main(req, res) {
         ensureDetailAccount();
         if (String(parent.Id) === relatedId && parent.Type === relatedType) {
           related = catalogItem(parent);
-          if(item.type==='Episode'){seriesPeople=parent.People || [];creditMetadata=parent;}
+          if(hasSeriesParent){seriesPeople=parent.People || [];creditMetadata=parent;}
           embyById.set(relatedId, related);
         }
       } catch { /* Keep the playable item detail when related metadata is unavailable. */ }
     }
+    const broadcastPromise=process.env.CINEMA_TVMAZE_SCHEDULE==='0'?Promise.resolve(seriesStatus(creditMetadata)):seriesSchedules.get(creditMetadata).catch(()=>seriesStatus(creditMetadata));
     let sources = [], recommendedSourceId = '', sourcesError = '';
     if (!item.folder && ['Movie', 'Episode', 'Video'].includes(item.type)) {
       try {
@@ -743,17 +746,18 @@ async function main(req, res) {
     let people=nativePeople,castTimer;
     try{people=await Promise.race([castEnricher.enrich(nativePeople,creditMetadata),new Promise(resolve=>{castTimer=setTimeout(()=>resolve(nativePeople),6000);castTimer.unref();})]);}catch{/* Native credits remain usable during a metadata outage. */}finally{clearTimeout(castTimer);}
     ensureDetailAccount();
+    const broadcast=await broadcastPromise;ensureDetailAccount();
     for(const person of people)if(person.id)knownPeople.set(person.id,{...knownPeople.get(person.id),...person,imageTag:person.imageTag || knownPeople.get(person.id)?.imageTag || ''});
     return json(res, 200, {
       ...publicEmbyItem(item),
       ...detailProgress,
       sources, recommendedSourceId, sourcesError,
-      ...(related && { [item.type === 'Episode' ? 'series' : 'collection']: publicEmbyItem(related) }),
+      ...(related && { [hasSeriesParent ? 'series' : 'collection']: publicEmbyItem(related) }),
       following: !!saved.following[embySession.userId]?.includes(id),
       runtimeMinutes: full.RunTimeTicks ? Math.round(Number(full.RunTimeTicks) / 600000000) : null,
       officialRating: full.OfficialRating || '',
       tagline: full.Taglines?.[0] || '',
-      seriesStatus:seriesStatus(creditMetadata),
+      seriesStatus:broadcast,
       people,peopleFromSeries:item.type==='Episode' && !full.People?.length && seriesPeople.length>0
     });
   }
